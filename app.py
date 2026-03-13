@@ -95,7 +95,7 @@ def reset_app():
     st.rerun()
 
 # ==========================================
-# 3. GENERADORES DE PDF (MAGIA PURA)
+# 3. GENERADORES DE PDF
 # ==========================================
 def txt(texto):
     if not texto: return ""
@@ -107,7 +107,7 @@ def generar_pdf_hoja_ruta(d):
     try: pdf.image("logo_superior.png", 10, 8, 40)
     except: pass
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 20, "", ln=True) # Espacio logo
+    pdf.cell(0, 20, "", ln=True) 
     pdf.cell(0, 10, txt(d[4].upper()), ln=True, align='C')
     pdf.ln(5)
     
@@ -134,7 +134,6 @@ def generar_pdf_hoja_ruta(d):
     pdf.multi_cell(0, 6, txt(d[52]))
     pdf.ln(3)
     
-    # Recursos Internos Solicitados
     if (d[16] == "Aplica" and d[17]) or (d[18] == "Aplica" and d[22]) or (d[32] == "Aplica" and d[36]):
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 8, txt("RECURSOS INSTITUCIONALES ASIGNADOS"), ln=True, border='B')
@@ -294,7 +293,7 @@ elif st.session_state.pantalla == 'buscador_eventos':
     if st.button("🏠 Volver al inicio"): reset_app()
 
 # ==========================================
-# 5. FORMULARIOS (SECCIONES 2 A 6) - DISEÑO PREMIUM
+# 5. FORMULARIOS (SECCIONES 2 A 6) 
 # ==========================================
 
 # --- SECCIÓN 2 ---
@@ -318,7 +317,6 @@ elif st.session_state.pantalla == 'seccion_2':
         try: def_f_ev = datetime.strptime(d[10], "%d/%m/%Y").date() if d[10] else date.today()
         except: def_f_ev = date.today()
         
-        # Recuperador inteligente de horas guardadas
         con_fin_def = False
         try:
             if "-" in d[11]:
@@ -362,7 +360,6 @@ elif st.session_state.pantalla == 'seccion_2':
             st.error("❌ El celular debe tener 10 dígitos numéricos.")
         else:
             meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-            # Formatear la hora
             hora_str = hora_inicio.strftime("%I:%M %p")
             if con_fin: hora_str += f" - {hora_fin.strftime('%I:%M %p')}"
             
@@ -382,29 +379,47 @@ elif st.session_state.pantalla == 'seccion_2':
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 3 ---
+# --- SECCIÓN 3 --- (BLINDADA)
 elif st.session_state.pantalla == 'seccion_3':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Entidades Externas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
-    aplica = st.radio("¿Aplica coordinación externa?", ["No aplica", "Aplica"], index=1 if d[12] != "" else 0)
+    
+    # Validar si había algo antes de forma segura
+    aplica_def = 1 if str(d[12]).strip() != "" else 0
+    aplica = st.radio("¿Aplica coordinación externa?", ["No aplica", "Aplica"], index=aplica_def)
+    
     ent_str = ""; sol_str = ""; fs_str = ""; fr_str = ""
     
     if aplica == "Aplica":
-        e_ex = d[12].split('\n') if d[12] else []
-        s_ex = d[13].split('\n') if d[13] else []
-        fs_ex = d[14].split('\n') if d[14] else []
-        fr_ex = d[15].split('\n') if d[15] else []
+        # Limpieza segura de los datos viejos
+        e_ex = [x for x in str(d[12]).split('\n') if x.strip()]
+        s_ex = [x for x in str(d[13]).split('\n') if x.strip()]
+        fs_ex = [x for x in str(d[14]).split('\n') if x.strip()]
+        fr_ex = [x for x in str(d[15]).split('\n') if x.strip()]
         
-        num_ent = st.selectbox("¿Cuántas entidades?", list(range(1, 9)), index=max(0, len(e_ex)-1))
+        num_ent_def = len(e_ex) if len(e_ex) > 0 else 1
+        if num_ent_def > 8: num_ent_def = 8
+        
+        num_ent = st.selectbox("¿Cuántas entidades?", list(range(1, 9)), index=num_ent_def-1)
         l_nom=[]; l_sol=[]; l_fs=[]; l_fr=[]
         
         for i in range(num_ent):
             with st.expander(f"🏢 Entidad Externa {i+1}", expanded=True):
-                vn = e_ex[i].split('. ', 1)[1] if i < len(e_ex) and '. ' in e_ex[i] else ""
-                vs = s_ex[i].split('. ', 1)[1] if i < len(s_ex) and '. ' in s_ex[i] else ""
-                try: vfs = datetime.strptime(fs_ex[i].split('. ', 1)[1], "%d/%m/%Y").date()
+                # Recuperar de forma blindada
+                vn = e_ex[i] if i < len(e_ex) else ""
+                if ". " in vn: vn = vn.split('. ', 1)[1]
+                
+                vs = s_ex[i] if i < len(s_ex) else ""
+                if ". " in vs: vs = vs.split('. ', 1)[1]
+                
+                vfs_str = fs_ex[i] if i < len(fs_ex) else ""
+                if ". " in vfs_str: vfs_str = vfs_str.split('. ', 1)[1]
+                try: vfs = datetime.strptime(vfs_str, "%d/%m/%Y").date()
                 except: vfs = date.today()
-                try: vfr = datetime.strptime(fr_ex[i].split('. ', 1)[1], "%d/%m/%Y").date()
+                
+                vfr_str = fr_ex[i] if i < len(fr_ex) else ""
+                if ". " in vfr_str: vfr_str = vfr_str.split('. ', 1)[1]
+                try: vfr = datetime.strptime(vfr_str, "%d/%m/%Y").date()
                 except: vfr = date.today()
 
                 nom = st.text_input("Nombre de la entidad", value=vn, key=f"e_{i}")
@@ -413,7 +428,7 @@ elif st.session_state.pantalla == 'seccion_3':
                 with c1: fs = st.date_input("Fecha solicitud", value=vfs, key=f"fs_{i}")
                 with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{i}")
                 
-                if nom: 
+                if nom.strip(): 
                     l_nom.append(f"{i+1}. {nom}"); l_sol.append(f"{i+1}. {sol}")
                     l_fs.append(f"{i+1}. {fs.strftime('%d/%m/%Y')}"); l_fr.append(f"{i+1}. {fr.strftime('%d/%m/%Y')}")
                     
@@ -430,12 +445,11 @@ elif st.session_state.pantalla == 'seccion_3':
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 4 (TABS PREMIUM) ---
+# --- SECCIÓN 4 ---
 elif st.session_state.pantalla == 'seccion_4':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Áreas Internas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    # Diseño en Pestañas
     tab1, tab2, tab3, tab4 = st.tabs(["🎨 Culturas y Rec.", "📢 Comunicación", "👥 Talento Humano", "🏢 Administración"])
     
     with tab1:
@@ -498,7 +512,7 @@ elif st.session_state.pantalla == 'seccion_5':
         with st.expander(f"🚐 Requerimiento de {n}", expanded=(d[idx]=="Aplica")):
             ap = st.radio(f"¿Aplica {n}?", ["No aplica", "Aplica"], key=f"ap_{idx}", index=1 if d[idx]=="Aplica" else 0)
             if ap == "Aplica":
-                v_n = int(d[idx+1]) if d[idx+1].isdigit() else 1
+                v_n = int(d[idx+1]) if str(d[idx+1]).isdigit() else 1
                 num = st.selectbox(f"N° de {n}", list(range(1, mx+1)), key=f"n_{idx}", index=v_n-1)
                 cont = []
                 for i in range(num):
@@ -534,16 +548,22 @@ elif st.session_state.pantalla == 'seccion_5':
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 6: EVALUACIÓN, FIN Y DESCARGAS ---
+# --- SECCIÓN 6 --- (BLINDADA)
 elif st.session_state.pantalla == 'seccion_6':
     st.markdown("<h3 style='text-align: center; color: white;'>Cierre y Evaluación del Evento</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
     with st.container():
-        nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"], index=4 if d[53]=="" else int(d[53])-1)
+        # Escudo protector para extraer el nivel de ejecución (evita el ValueError de tu foto)
+        try:
+            val_idx = int(str(d[53]).strip()[0]) - 1
+            if val_idx < 0 or val_idx > 4: val_idx = 4
+        except:
+            val_idx = 4 # Por defecto marca 5 (Perfecto)
+            
+        nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"], index=val_idx)
         obs = st.text_area("Observaciones Finales", value=d[54])
     
-    # BOTONES DE DESCARGA PDF 
     st.markdown("#### 📥 Descargar Documentos Generados")
     col_pdf1, col_pdf2 = st.columns(2)
     with col_pdf1:
