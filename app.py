@@ -1,8 +1,53 @@
 import streamlit as st
 import base64
+import json
+import gspread
+from google.oauth2.service_account import Credentials
 
 # 1. Configuración de la página
 st.set_page_config(page_title="Hoja de Ruta - Eventos", layout="centered")
+
+# --- NUEVO: CONEXIÓN A GOOGLE SHEETS ---
+# Usamos cache para que el "mensajero" no se conecte desde cero cada vez que damos un clic
+@st.cache_resource
+def conectar_excel():
+    try:
+        # A. Sacar la llave de la bóveda secreta de Streamlit
+        llave_secreta = st.secrets["json_key"]
+        credenciales_dict = json.loads(llave_secreta)
+        
+        # B. Darle permisos al robot para leer y escribir
+        permisos = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        
+        # C. Crear la credencial oficial
+        credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=permisos)
+        
+        # D. Conectar el mensajero (gspread)
+        cliente = gspread.authorize(credenciales)
+        
+        # E. Abrir el archivo de Drive (El nombre debe ser EXACTAMENTE el que tiene en Drive)
+        # Asegúrate de haberle dado permiso de "Editor" al correo del robot en este archivo
+        archivo = cliente.open("Hoja de ruta dirección de Culturas, Patrimonio y Recreación")
+        hoja = archivo.sheet1 # Selecciona la primera pestaña del Excel
+        
+        return hoja
+    except Exception as e:
+        st.error(f"Error de conexión: {e}")
+        return None
+
+# Inicializar la tubería de datos
+hoja_datos = conectar_excel()
+
+# Pequeña prueba visual (luego la borraremos)
+if hoja_datos is not None:
+    st.toast("¡Conexión exitosa con el Excel!", icon="✅")
+
+
+# --- DE AQUÍ EN ADELANTE VA EL RESTO DE TU CÓDIGO ---
+# (La función agregar_fondo, el control de navegación, y las pantallas que ya tenías)
 
 # 2. Función para cargar el fondo de pantalla de forma fija
 def agregar_fondo(imagen_archivo):
