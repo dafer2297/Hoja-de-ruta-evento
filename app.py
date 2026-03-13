@@ -95,12 +95,10 @@ def reset_app():
     st.rerun()
 
 # ==========================================
-# 3. GENERADORES DE PDF (CORREGIDOS)
+# 3. GENERADORES DE PDF (BLINDADOS CON MEDIDAS EXACTAS)
 # ==========================================
 def txt(texto):
-    # ESCUDO ANTI-ERRORES: Si está vacío, devuelve un guion.
     if not texto or str(texto).strip() == "": return "-"
-    # Respeta los saltos de línea (\n) para los recuadros grandes
     return str(texto).replace('“', '"').replace('”', '"').encode('latin-1', 'replace').decode('latin-1')
 
 def generar_pdf_hoja_ruta(d):
@@ -113,11 +111,12 @@ def generar_pdf_hoja_ruta(d):
     pdf.cell(0, 10, txt(d[4].upper()), ln=True, align='C')
     pdf.ln(5)
     
+    # MEDIDAS FIJAS: 40mm para etiqueta, 150mm para texto (190mm total, entra perfecto en A4)
     def fila_pdf(label, valor):
         pdf.set_font("Arial", 'B', 11)
         pdf.cell(40, 7, txt(label), 0, 0)
         pdf.set_font("Arial", '', 11)
-        pdf.multi_cell(0, 7, txt(valor))
+        pdf.multi_cell(150, 7, txt(valor))
         
     fila_pdf("Lugar:", d[9])
     fila_pdf("Día:", d[10])
@@ -133,7 +132,7 @@ def generar_pdf_hoja_ruta(d):
     pdf.set_font("Arial", 'B', 11)
     pdf.cell(0, 7, txt("Descripción y Requerimientos:"), ln=True)
     pdf.set_font("Arial", '', 11)
-    pdf.multi_cell(0, 6, txt(d[52]))
+    pdf.multi_cell(190, 6, txt(d[52])) # 190mm es el ancho total de escritura
     pdf.ln(3)
     
     if (d[16] == "Aplica" and d[17]) or (d[18] == "Aplica" and d[22]) or (d[32] == "Aplica" and d[36]):
@@ -142,13 +141,13 @@ def generar_pdf_hoja_ruta(d):
         pdf.ln(2)
         if d[16] == "Aplica" and d[17]:
             pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Culturas y Recreación:"), ln=True)
-            pdf.set_font("Arial", '', 10); pdf.multi_cell(0, 5, txt(d[17])); pdf.ln(1)
+            pdf.set_font("Arial", '', 10); pdf.multi_cell(190, 5, txt(d[17])); pdf.ln(1)
         if d[18] == "Aplica" and d[22]:
             pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Comunicación:"), ln=True)
-            pdf.set_font("Arial", '', 10); pdf.multi_cell(0, 5, txt(d[22])); pdf.ln(1)
+            pdf.set_font("Arial", '', 10); pdf.multi_cell(190, 5, txt(d[22])); pdf.ln(1)
         if d[32] == "Aplica" and d[36]:
             pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Administración:"), ln=True)
-            pdf.set_font("Arial", '', 10); pdf.multi_cell(0, 5, txt(d[36])); pdf.ln(1)
+            pdf.set_font("Arial", '', 10); pdf.multi_cell(190, 5, txt(d[36])); pdf.ln(1)
 
     pdf.ln(8)
     pdf.set_font("Arial", 'B', 11)
@@ -169,9 +168,12 @@ def generar_pdf_expediente(d):
         pdf.cell(0, 8, txt(texto), ln=True, border='B')
         pdf.ln(2)
         
+    # MEDIDAS FIJAS: 55mm para etiqueta, 135mm para texto
     def lin(label, valor):
-        pdf.set_font("Arial", 'B', 10); pdf.cell(50, 6, txt(label), 0, 0)
-        pdf.set_font("Arial", '', 10); pdf.multi_cell(0, 6, txt(valor))
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(55, 6, txt(label), 0, 0)
+        pdf.set_font("Arial", '', 10)
+        pdf.multi_cell(135, 6, txt(valor))
 
     tit("1. Datos Generales")
     lin("Área Institucional:", d[1])
