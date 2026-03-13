@@ -4,6 +4,7 @@ import json
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
+from fpdf import FPDF
 
 # ==========================================
 # 1. CONFIGURACIÓN Y CONEXIÓN
@@ -23,16 +24,14 @@ def agregar_fondo(imagen_archivo):
                 background-position: center;
                 background-attachment: fixed;
             }}
-            .stButton>button {{ 
-                width: 100%; 
-                margin-top: -10px;
-            }}
+            .stButton>button {{ width: 100%; margin-top: -10px; }}
+            /* Diseño para contenedores premium */
+            div[data-testid="stExpander"] {{ background-color: rgba(255,255,255,0.05); border-radius: 10px; }}
             </style>
             """,
             unsafe_allow_html=True
         )
-    except:
-        pass
+    except: pass
 
 agregar_fondo("fondo_app.png")
 
@@ -60,9 +59,7 @@ if 'area_seleccionada' not in st.session_state: st.session_state.area_selecciona
 if 'fila_actual' not in st.session_state: st.session_state.fila_actual = None
 if 'modo' not in st.session_state: st.session_state.modo = "nuevo"
 if 'confirmar_eliminar' not in st.session_state: st.session_state.confirmar_eliminar = False
-
-if 'fila_datos' not in st.session_state:
-    st.session_state.fila_datos = [""] * 60
+if 'fila_datos' not in st.session_state: st.session_state.fila_datos = [""] * 60
 
 def calcular_dias(fecha_inicio, fecha_fin):
     if not fecha_inicio or not fecha_fin or fecha_inicio == "" or fecha_fin == "": return ""
@@ -70,11 +67,9 @@ def calcular_dias(fecha_inicio, fecha_fin):
         d1 = datetime.strptime(fecha_inicio, "%d/%m/%Y").date()
         d2 = datetime.strptime(fecha_fin, "%d/%m/%Y").date()
         return str((d2 - d1).days)
-    except:
-        return ""
+    except: return ""
 
 def actualizar_calculos_automaticos():
-    # Esta función se asegura de calcular los días en cualquier momento si las fechas existen
     d = st.session_state.fila_datos
     d[55] = calcular_dias(d[6], d[10])
     d[56] = calcular_dias(d[20], d[21]) if d[18] == "Aplica" else ""
@@ -83,7 +78,7 @@ def actualizar_calculos_automaticos():
 
 def guardar_en_excel():
     if st.session_state.fila_actual:
-        actualizar_calculos_automaticos() # Calcula antes de guardar siempre
+        actualizar_calculos_automaticos()
         rango = f"A{st.session_state.fila_actual}:BH{st.session_state.fila_actual}"
         hoja_datos.update(values=[st.session_state.fila_datos], range_name=rango)
 
@@ -100,10 +95,122 @@ def reset_app():
     st.rerun()
 
 # ==========================================
-# 3. PANTALLAS DE NAVEGACIÓN
+# 3. GENERADORES DE PDF (MAGIA PURA)
 # ==========================================
+def txt(texto):
+    if not texto: return ""
+    return str(texto).replace('“', '"').replace('”', '"').replace('\n', ' ').encode('latin-1', 'replace').decode('latin-1')
 
-# --- PANTALLA 1: INICIO ---
+def generar_pdf_hoja_ruta(d):
+    pdf = FPDF()
+    pdf.add_page()
+    try: pdf.image("logo_superior.png", 10, 8, 40)
+    except: pass
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 20, "", ln=True) # Espacio logo
+    pdf.cell(0, 10, txt(d[4].upper()), ln=True, align='C')
+    pdf.ln(5)
+    
+    def fila_pdf(label, valor):
+        pdf.set_font("Arial", 'B', 11)
+        pdf.cell(40, 7, txt(label), 0, 0)
+        pdf.set_font("Arial", '', 11)
+        pdf.multi_cell(0, 7, txt(valor))
+        
+    fila_pdf("Lugar:", d[9])
+    fila_pdf("Día:", d[10])
+    fila_pdf("Hora:", d[11])
+    fila_pdf("Concentración:", d[42])
+    fila_pdf("Responsable:", f"{d[39]} - Cel: {d[40]}")
+    
+    if d[43] == "Aplica": fila_pdf("Camionetas:", d[45].replace("\n", ", "))
+    if d[46] == "Aplica": fila_pdf("Busetas:", d[48].replace("\n", ", "))
+    if d[49] == "Aplica": fila_pdf("Auxiliares:", d[51].replace("\n", ", "))
+    
+    pdf.ln(3)
+    pdf.set_font("Arial", 'B', 11)
+    pdf.cell(0, 7, txt("Descripción y Requerimientos:"), ln=True)
+    pdf.set_font("Arial", '', 11)
+    pdf.multi_cell(0, 6, txt(d[52]))
+    pdf.ln(3)
+    
+    # Recursos Internos Solicitados
+    if (d[16] == "Aplica" and d[17]) or (d[18] == "Aplica" and d[22]) or (d[32] == "Aplica" and d[36]):
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 8, txt("RECURSOS INSTITUCIONALES ASIGNADOS"), ln=True, border='B')
+        pdf.ln(2)
+        if d[16] == "Aplica" and d[17]:
+            pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Culturas y Recreación:"), ln=True)
+            pdf.set_font("Arial", '', 10); pdf.multi_cell(0, 5, txt(d[17])); pdf.ln(1)
+        if d[18] == "Aplica" and d[22]:
+            pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Comunicación:"), ln=True)
+            pdf.set_font("Arial", '', 10); pdf.multi_cell(0, 5, txt(d[22])); pdf.ln(1)
+        if d[32] == "Aplica" and d[36]:
+            pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Administración:"), ln=True)
+            pdf.set_font("Arial", '', 10); pdf.multi_cell(0, 5, txt(d[36])); pdf.ln(1)
+
+    pdf.ln(8)
+    pdf.set_font("Arial", 'B', 11)
+    pdf.cell(0, 8, txt(f"ORGANIZADOR DEL EVENTO: {d[7]} ({d[8]})"), ln=True, align='C')
+    
+    salida = pdf.output(dest='S')
+    return salida.encode('latin-1') if isinstance(salida, str) else bytes(salida)
+
+def generar_pdf_expediente(d):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 15)
+    pdf.cell(0, 10, txt("EXPEDIENTE COMPLETO DEL EVENTO"), ln=True, align='C')
+    pdf.ln(5)
+    
+    def tit(texto):
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 8, txt(texto), ln=True, border='B')
+        pdf.ln(2)
+        
+    def lin(label, valor):
+        pdf.set_font("Arial", 'B', 10); pdf.cell(50, 6, txt(label), 0, 0)
+        pdf.set_font("Arial", '', 10); pdf.multi_cell(0, 6, txt(valor))
+
+    tit("1. Datos Generales")
+    lin("Área Institucional:", d[1])
+    lin("Nombre del Evento:", d[4])
+    lin("Tipo de Evento:", d[5])
+    lin("Responsable Planificación:", d[3])
+    lin("Lugar:", d[9])
+    lin("Fecha y Hora:", f"{d[10]} | {d[11]}")
+    lin("Inicio Planificación:", d[6])
+    lin("Organizador Externo:", f"{d[7]} (Cel: {d[8]})")
+    
+    pdf.ln(5)
+    tit("2. Entidades Externas")
+    lin("Aplica Externas:", d[12] if d[12]!="" else "No")
+    
+    pdf.ln(5)
+    tit("3. Áreas Internas")
+    lin("Culturas / Recreación:", f"Aplica: {d[16]} | Recursos: {d[17]}")
+    lin("Comunicación:", f"Aplica: {d[18]} | Cumplimiento: {d[23]}")
+    lin("Talento Humano:", f"Aplica: {d[25]} | Cumplimiento: {d[30]}")
+    lin("Administración:", f"Aplica: {d[32]} | Cumplimiento: {d[37]}")
+    
+    pdf.ln(5)
+    tit("4. Logística y Transporte")
+    lin("Resp. en territorio:", f"{d[39]} (Cel: {d[40]})")
+    lin("Vehículos / Personal:", f"Camionetas: {d[43]} | Busetas: {d[46]} | Auxiliares: {d[49]}")
+    lin("Descripción/Insumos:", d[52])
+    
+    pdf.ln(5)
+    tit("5. Evaluación Final")
+    lin("Estado del Evento:", d[59])
+    lin("Nivel de Ejecución:", d[53])
+    lin("Observaciones Finales:", d[54])
+    
+    salida = pdf.output(dest='S')
+    return salida.encode('latin-1') if isinstance(salida, str) else bytes(salida)
+
+# ==========================================
+# 4. PANTALLAS DE INICIO Y BUSCADOR
+# ==========================================
 if st.session_state.pantalla == 'inicio':
     col_logo1, col_logo2, col_logo3 = st.columns([1, 2, 1])
     with col_logo2:
@@ -128,7 +235,6 @@ if st.session_state.pantalla == 'inicio':
             st.session_state.pantalla = 'opciones_evento'
             st.rerun()
 
-# --- PANTALLA 2: NUEVO O EN PROCESO ---
 elif st.session_state.pantalla == 'opciones_evento':
     st.markdown(f"<h3 style='text-align: center; color: white;'>Área: {st.session_state.area_seleccionada}</h3>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
@@ -143,31 +249,24 @@ elif st.session_state.pantalla == 'opciones_evento':
             st.session_state.modo = "editar"
             st.session_state.pantalla = 'buscador_eventos'
             st.rerun()
-    
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- BUSCADOR DE EVENTOS ---
 elif st.session_state.pantalla == 'buscador_eventos':
     st.markdown("<h3 style='text-align: center; color: white;'>Seleccionar evento</h3>", unsafe_allow_html=True)
-    
     lista_resp = ["Responsable 1", "Responsable 2", "Responsable 3", "Responsable 4", "Responsable 5"] if st.session_state.area_seleccionada == "Culturas y Patrimonio" else ["Responsable 6", "Responsable 7", "Responsable 8"]
     resp_busqueda = st.selectbox("Seleccione el responsable", lista_resp)
     
     try:
         todos_los_datos = hoja_datos.get_all_values()
         eventos_encontrados_dict = {}
-        
         for i in range(1, len(todos_los_datos)):
             fila = todos_los_datos[i]
             if len(fila) > 4:
                 if fila[1] == st.session_state.area_seleccionada and fila[3] == resp_busqueda:
-                    n_registro = fila[0]
-                    nombre_ev = fila[4]
-                    fecha_ev = fila[10] if len(fila) > 10 else "Sin Fecha"
                     estado = "Finalizado" if len(fila) >= 60 and fila[59] == "Finalizado" else "En proceso"
-                    
-                    unique_key = f"{nombre_ev} (Fecha: {fecha_ev} - N° {n_registro} - {estado})"
+                    fecha_ev = fila[10] if len(fila) > 10 else "Sin Fecha"
+                    unique_key = f"{fila[4]} (Fecha: {fecha_ev} - N° {fila[0]} - {estado})"
                     eventos_encontrados_dict[unique_key] = (i + 1, fila)
         
         opciones_eventos = list(eventos_encontrados_dict.keys())
@@ -180,58 +279,76 @@ elif st.session_state.pantalla == 'buscador_eventos':
                 if st.button("Abrir Evento"):
                     fila_real, datos_fila = eventos_encontrados_dict[evento_seleccionado]
                     st.session_state.fila_actual = fila_real
-                    mientras_datos = datos_fila + [""] * (60 - len(datos_fila))
-                    st.session_state.fila_datos = mientras_datos[:60]
+                    st.session_state.fila_datos = (datos_fila + [""] * 60)[:60]
                     st.session_state.pantalla = 'seccion_2'
                     st.rerun()
             with col1:
-                if st.button("Regresar"):
-                    st.session_state.pantalla = 'opciones_evento'
-                    st.rerun()
+                if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
         else:
             st.warning("Aún no ha creado eventos.")
             if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
-                
-    except Exception as e:
-        st.error("Hubo un problema al buscar los datos en el Excel.")
+    except:
+        st.error("Error al buscar.")
         if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
-
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
 # ==========================================
-# 4. FORMULARIOS (SECCIONES 2 A 6)
+# 5. FORMULARIOS (SECCIONES 2 A 6) - DISEÑO PREMIUM
 # ==========================================
 
-# --- SECCIÓN 2: INFORMACIÓN DEL EVENTO ---
+# --- SECCIÓN 2 ---
 elif st.session_state.pantalla == 'seccion_2':
     st.markdown("<h3 style='text-align: center; color: white;'>Información del Evento</h3>", unsafe_allow_html=True)
-    
-    lista_resp = ["Responsable 1", "Responsable 2", "Responsable 3", "Responsable 4", "Responsable 5"] if st.session_state.area_seleccionada == "Culturas y Patrimonio" else ["Responsable 6", "Responsable 7", "Responsable 8"]
     d = st.session_state.fila_datos
+    lista_resp = ["Responsable 1", "Responsable 2", "Responsable 3", "Responsable 4", "Responsable 5"] if st.session_state.area_seleccionada == "Culturas y Patrimonio" else ["Responsable 6", "Responsable 7", "Responsable 8"]
     
-    resp_index = lista_resp.index(d[3]) if d[3] in lista_resp else 0
-    responsable = st.selectbox("Responsable de área", lista_resp, index=resp_index)
+    with st.container():
+        st.markdown("#### 📝 1. Datos Generales")
+        nombre_evento = st.text_input("Nombre del evento", value=d[4])
+        c1, c2 = st.columns(2)
+        with c1: tipo_evento = st.selectbox("Tipo de evento", ["Propio", "Apoyo"], index=0 if d[5] != "Apoyo" else 1)
+        with c2: lugar_evento = st.text_input("Lugar del evento", value=d[9])
     
-    nombre_evento = st.text_input("Nombre del evento", value=d[4])
-    tipo_evento = st.selectbox("Tipo de evento", ["Propio", "Apoyo"], index=0 if d[5] != "Apoyo" else 1)
-    
-    # Manejo de fechas para que no den error si están vacías al editar
-    try: def_i_org = datetime.strptime(d[6], "%d/%m/%Y").date() if d[6] else date.today()
-    except: def_i_org = date.today()
-    try: def_f_ev = datetime.strptime(d[10], "%d/%m/%Y").date() if d[10] else date.today()
-    except: def_f_ev = date.today()
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        inicio_org = st.date_input("Inicio organización del evento", value=def_i_org)
-        fecha_evento = st.date_input("Fecha del evento", value=def_f_ev)
-    with c2:
-        nombre_org = st.text_input("Nombre del organizador", value=d[7])
-        hora_evento = st.time_input("Hora del evento")
+    st.write("---")
+    with st.container():
+        st.markdown("#### 📅 2. Fechas y Horarios")
+        try: def_i_org = datetime.strptime(d[6], "%d/%m/%Y").date() if d[6] else date.today()
+        except: def_i_org = date.today()
+        try: def_f_ev = datetime.strptime(d[10], "%d/%m/%Y").date() if d[10] else date.today()
+        except: def_f_ev = date.today()
         
-    celular_org = st.text_input("Celular del organizador", max_chars=10, value=d[8])
-    lugar_evento = st.text_input("Lugar del evento", value=d[9])
+        # Recuperador inteligente de horas guardadas
+        con_fin_def = False
+        try:
+            if "-" in d[11]:
+                def_h_ev = datetime.strptime(d[11].split("-")[0].strip(), "%I:%M %p").time()
+                def_h_fin = datetime.strptime(d[11].split("-")[1].strip(), "%I:%M %p").time()
+                con_fin_def = True
+            else:
+                def_h_ev = datetime.strptime(d[11], "%I:%M %p").time()
+                def_h_fin = datetime.now().time()
+        except:
+            def_h_ev = datetime.now().time()
+            def_h_fin = datetime.now().time()
+
+        c3, c4 = st.columns(2)
+        with c3:
+            fecha_evento = st.date_input("Fecha del evento", value=def_f_ev)
+            inicio_org = st.date_input("Fecha de inicio de planificación", value=def_i_org)
+        with c4:
+            hora_inicio = st.time_input("Hora de inicio", value=def_h_ev)
+            con_fin = st.checkbox("¿Añadir hora de cierre?", value=con_fin_def)
+            if con_fin: hora_fin = st.time_input("Hora de cierre", value=def_h_fin)
+    
+    st.write("---")
+    with st.container():
+        st.markdown("#### 👥 3. Involucrados")
+        resp_index = lista_resp.index(d[3]) if d[3] in lista_resp else 0
+        responsable = st.selectbox("Responsable de área (Interno)", lista_resp, index=resp_index)
+        c5, c6 = st.columns(2)
+        with c5: nombre_org = st.text_input("Nombre del organizador externo", value=d[7])
+        with c6: celular_org = st.text_input("Celular del organizador", max_chars=10, value=d[8])
     
     st.write("---")
     col_btn1, col_btn2 = st.columns(2)
@@ -240,279 +357,232 @@ elif st.session_state.pantalla == 'seccion_2':
         
     if btn_guardar or btn_regresar:
         if nombre_evento.strip() == "" or nombre_org.strip() == "" or celular_org.strip() == "" or lugar_evento.strip() == "":
-            st.error("❌ Alto ahí: Debes llenar todos los campos de esta sección.")
+            st.error("❌ Debes llenar todos los campos (Nombre, Lugar y Datos del Organizador).")
         elif not celular_org.isdigit() or len(celular_org) != 10:
-            st.error("❌ El celular del organizador debe tener exactamente 10 dígitos numéricos.")
+            st.error("❌ El celular debe tener 10 dígitos numéricos.")
         else:
             meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-            mes_texto = meses[fecha_evento.month - 1]
+            # Formatear la hora
+            hora_str = hora_inicio.strftime("%I:%M %p")
+            if con_fin: hora_str += f" - {hora_fin.strftime('%I:%M %p')}"
             
-            st.session_state.fila_datos[1:12] = [st.session_state.area_seleccionada, mes_texto, responsable, nombre_evento, tipo_evento, inicio_org.strftime("%d/%m/%Y"), nombre_org, celular_org, lugar_evento, fecha_evento.strftime("%d/%m/%Y"), hora_evento.strftime("%H:%M")]
+            st.session_state.fila_datos[1:12] = [st.session_state.area_seleccionada, meses[fecha_evento.month-1], responsable, nombre_evento, tipo_evento, inicio_org.strftime("%d/%m/%Y"), nombre_org, celular_org, lugar_evento, fecha_evento.strftime("%d/%m/%Y"), hora_str]
             
-            # Etiqueta "En proceso" automática
             if st.session_state.modo == "nuevo" and not st.session_state.fila_actual:
                 num_filas = len(hoja_datos.col_values(1))
                 st.session_state.fila_datos[0] = str(num_filas)
                 st.session_state.fila_datos[59] = "En proceso"
                 hoja_datos.append_row(st.session_state.fila_datos)
                 st.session_state.fila_actual = num_filas + 1
-            elif not d[59] or d[59] == "":
-                st.session_state.fila_datos[59] = "En proceso"
+            elif not d[59]: st.session_state.fila_datos[59] = "En proceso"
             
             if btn_guardar: navegar('seccion_3')
             if btn_regresar: navegar('opciones_evento')
             st.rerun()
-            
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 3: EXTERNAS (CARGA DE DATOS ARREGLADA) ---
+# --- SECCIÓN 3 ---
 elif st.session_state.pantalla == 'seccion_3':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Entidades Externas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
-    
-    aplica = st.radio("¿Aplica?", ["No aplica", "Aplica"], index=1 if d[12] != "" else 0)
-    entidades_str = ""; solicitudes_str = ""; f_sol_str = ""; f_resp_str = ""
+    aplica = st.radio("¿Aplica coordinación externa?", ["No aplica", "Aplica"], index=1 if d[12] != "" else 0)
+    ent_str = ""; sol_str = ""; fs_str = ""; fr_str = ""
     
     if aplica == "Aplica":
-        # Desempaquetamos los datos guardados si existen
-        ent_exist = d[12].split('\n') if d[12] else []
-        sol_exist = d[13].split('\n') if d[13] else []
-        fs_exist = d[14].split('\n') if d[14] else []
-        fr_exist = d[15].split('\n') if d[15] else []
+        e_ex = d[12].split('\n') if d[12] else []
+        s_ex = d[13].split('\n') if d[13] else []
+        fs_ex = d[14].split('\n') if d[14] else []
+        fr_ex = d[15].split('\n') if d[15] else []
         
-        num_entidades_default = len(ent_exist) if len(ent_exist) > 0 else 1
-        num_entidades = st.selectbox("¿Cuántas entidades externas?", list(range(1, 9)), index=num_entidades_default-1)
+        num_ent = st.selectbox("¿Cuántas entidades?", list(range(1, 9)), index=max(0, len(e_ex)-1))
+        l_nom=[]; l_sol=[]; l_fs=[]; l_fr=[]
         
-        lista_nombres = []; lista_solicitudes = []; lista_f_sol = []; lista_f_resp = []
-        
-        for i in range(num_entidades):
-            st.markdown(f"**Entidad {i+1}**")
-            
-            # Rescatamos los valores previos limpiando el "1. " del inicio
-            val_nom = ent_exist[i].split('. ', 1)[1] if i < len(ent_exist) and '. ' in ent_exist[i] else ""
-            val_sol = sol_exist[i].split('. ', 1)[1] if i < len(sol_exist) and '. ' in sol_exist[i] else ""
-            
-            val_fs_str = fs_exist[i].split('. ', 1)[1] if i < len(fs_exist) and '. ' in fs_exist[i] else ""
-            try: val_fs = datetime.strptime(val_fs_str, "%d/%m/%Y").date()
-            except: val_fs = date.today()
-                
-            val_fr_str = fr_exist[i].split('. ', 1)[1] if i < len(fr_exist) and '. ' in fr_exist[i] else ""
-            try: val_fr = datetime.strptime(val_fr_str, "%d/%m/%Y").date()
-            except: val_fr = date.today()
+        for i in range(num_ent):
+            with st.expander(f"🏢 Entidad Externa {i+1}", expanded=True):
+                vn = e_ex[i].split('. ', 1)[1] if i < len(e_ex) and '. ' in e_ex[i] else ""
+                vs = s_ex[i].split('. ', 1)[1] if i < len(s_ex) and '. ' in s_ex[i] else ""
+                try: vfs = datetime.strptime(fs_ex[i].split('. ', 1)[1], "%d/%m/%Y").date()
+                except: vfs = date.today()
+                try: vfr = datetime.strptime(fr_ex[i].split('. ', 1)[1], "%d/%m/%Y").date()
+                except: vfr = date.today()
 
-            nom = st.text_input(f"Nombre de la entidad {i+1}", value=val_nom, key=f"ent_{i}")
-            sol = st.text_area(f"Solicitud {i+1}", value=val_sol, key=f"sol_{i}")
-            c1, c2 = st.columns(2)
-            with c1: fs = st.date_input(f"Fecha de solicitud {i+1}", value=val_fs, key=f"fs_{i}")
-            with c2: fr = st.date_input(f"Fecha de respuesta {i+1}", value=val_fr, key=f"fr_{i}")
-            
-            if nom != "": 
-                lista_nombres.append(f"{i+1}. {nom}")
-                lista_solicitudes.append(f"{i+1}. {sol}")
-                lista_f_sol.append(f"{i+1}. {fs.strftime('%d/%m/%Y')}")
-                lista_f_resp.append(f"{i+1}. {fr.strftime('%d/%m/%Y')}")
+                nom = st.text_input("Nombre de la entidad", value=vn, key=f"e_{i}")
+                sol = st.text_area("Solicitud realizada", value=vs, key=f"s_{i}")
+                c1, c2 = st.columns(2)
+                with c1: fs = st.date_input("Fecha solicitud", value=vfs, key=f"fs_{i}")
+                with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{i}")
                 
-        entidades_str = "\n".join(lista_nombres)
-        solicitudes_str = "\n".join(lista_solicitudes)
-        f_sol_str = "\n".join(lista_f_sol)
-        f_resp_str = "\n".join(lista_f_resp)
+                if nom: 
+                    l_nom.append(f"{i+1}. {nom}"); l_sol.append(f"{i+1}. {sol}")
+                    l_fs.append(f"{i+1}. {fs.strftime('%d/%m/%Y')}"); l_fr.append(f"{i+1}. {fr.strftime('%d/%m/%Y')}")
+                    
+        ent_str="\n".join(l_nom); sol_str="\n".join(l_sol); fs_str="\n".join(l_fs); fr_str="\n".join(l_fr)
         
     st.write("---")
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
-    with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
-    
-    if btn_guardar or btn_regresar:
-        if aplica == "Aplica":
-            st.session_state.fila_datos[12:16] = [entidades_str, solicitudes_str, f_sol_str, f_resp_str]
-        else:
-            st.session_state.fila_datos[12:16] = ["", "", "", ""]
-            
-        if btn_guardar: navegar('seccion_4')
-        if btn_regresar: navegar('seccion_2')
-        st.rerun()
-        
+    col1, col2 = st.columns(2)
+    if col1.button("⬅️ Regresar y Guardar"):
+        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["","","",""]
+        navegar('seccion_2'); st.rerun()
+    if col2.button("Guardar y Continuar ➡️"):
+        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["","","",""]
+        navegar('seccion_4'); st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 4: INTERNAS (CON TEXT_AREA GIGANTES) ---
+# --- SECCIÓN 4 (TABS PREMIUM) ---
 elif st.session_state.pantalla == 'seccion_4':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Áreas Internas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    st.markdown("**1. Dirección Culturas, Patrimonio y Recreación**")
-    ap_culturas = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="r_cult", index=1 if d[16]=="Aplica" else 0)
-    # Cambio a text_area gigante
-    rec_culturas = st.text_area("Recursos entregados", value=d[17]) if ap_culturas == "Aplica" else ""
+    # Diseño en Pestañas
+    tab1, tab2, tab3, tab4 = st.tabs(["🎨 Culturas y Rec.", "📢 Comunicación", "👥 Talento Humano", "🏢 Administración"])
     
-    st.write("---")
-    def dibujar_direccion(nombre, idx_base):
-        st.markdown(f"**{nombre}**")
-        aplica = st.radio("¿Aplica?", ["No aplica", "Aplica"], key=f"ap_{idx_base}", index=1 if d[idx_base]=="Aplica" else 0)
-        if aplica == "Aplica":
-            # Cambios a text_area gigante
-            sol = st.text_area("Solicitud realizada", value=d[idx_base+1], key=f"s_{idx_base}")
-            
-            try: val_fs = datetime.strptime(d[idx_base+2], "%d/%m/%Y").date() if d[idx_base+2] else date.today()
-            except: val_fs = date.today()
-            try: val_fr = datetime.strptime(d[idx_base+3], "%d/%m/%Y").date() if d[idx_base+3] else date.today()
-            except: val_fr = date.today()
-                
+    with tab1:
+        st.markdown("#### Dirección de Culturas, Patrimonio y Recreación")
+        ap_cult = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="r_cult", index=1 if d[16]=="Aplica" else 0)
+        rec_cult = st.text_area("Recursos entregados (Detalle)", value=d[17], height=150) if ap_cult == "Aplica" else ""
+    
+    def dib_dir(idx_base):
+        ap = st.radio("¿Aplica?", ["No aplica", "Aplica"], key=f"ap_{idx_base}", index=1 if d[idx_base]=="Aplica" else 0)
+        if ap == "Aplica":
+            sol = st.text_area("Solicitud realizada (Detalle)", value=d[idx_base+1], key=f"s_{idx_base}", height=100)
+            try: vfs = datetime.strptime(d[idx_base+2], "%d/%m/%Y").date() if d[idx_base+2] else date.today()
+            except: vfs = date.today()
+            try: vfr = datetime.strptime(d[idx_base+3], "%d/%m/%Y").date() if d[idx_base+3] else date.today()
+            except: vfr = date.today()
             c1, c2 = st.columns(2)
-            with c1: f_sol = st.date_input("Fecha solicitud", value=val_fs, key=f"fs_{idx_base}")
-            with c2: f_res = st.date_input("Fecha respuesta", value=val_fr, key=f"fr_{idx_base}")
-            
-            rec = st.text_area("Recursos Entregados", value=d[idx_base+4], key=f"r_{idx_base}")
-            
-            cumplio = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if d[idx_base+5]=="No" else 0)
-            nivel = "5"
-            if cumplio == "No":
-                nivel = st.selectbox("Nivel de cumplimiento", ["1 (20%)", "2 (40%)", "3 (60%)", "4 (80%)"], key=f"n_{idx_base}")
-                nivel = nivel[0]
-            else:
-                st.info("Nivel automático: 5 (100%)")
-            return ["Aplica", sol, f_sol.strftime("%d/%m/%Y"), f_res.strftime("%d/%m/%Y"), rec, cumplio, nivel]
+            with c1: fs = st.date_input("Fecha solicitud", value=vfs, key=f"fs_{idx_base}")
+            with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{idx_base}")
+            rec = st.text_area("Recursos Entregados (Detalle)", value=d[idx_base+4], key=f"r_{idx_base}", height=100)
+            cp = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if d[idx_base+5]=="No" else 0)
+            nv = st.selectbox("Nivel de cumplimiento", ["1 (20%)", "2 (40%)", "3 (60%)", "4 (80%)"], key=f"n_{idx_base}")[0] if cp=="No" else "5"
+            return ["Aplica", sol, fs.strftime("%d/%m/%Y"), fr.strftime("%d/%m/%Y"), rec, cp, nv]
         return ["No aplica", "", "", "", "", "", ""]
 
-    res_com = dibujar_direccion("2. Dirección Comunicación", 18)
-    st.write("---")
-    res_th = dibujar_direccion("3. Dirección de Talento Humano", 25)
-    st.write("---")
-    res_adm = dibujar_direccion("4. Dirección de Administración", 32)
+    with tab2: st.markdown("#### Dirección de Comunicación"); r_com = dib_dir(18)
+    with tab3: st.markdown("#### Dirección de Talento Humano"); r_th = dib_dir(25)
+    with tab4: st.markdown("#### Dirección de Administración"); r_adm = dib_dir(32)
 
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
-    with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
-    
-    if btn_guardar or btn_regresar:
-        st.session_state.fila_datos[16:39] = [ap_culturas, rec_culturas] + res_com + res_th + res_adm
-        
-        if btn_guardar: navegar('seccion_5')
-        if btn_regresar: navegar('seccion_3')
-        st.rerun()
-        
+    st.write("---")
+    col1, col2 = st.columns(2)
+    if col1.button("⬅️ Regresar y Guardar"):
+        st.session_state.fila_datos[16:39] = [ap_cult, rec_cult] + r_com + r_th + r_adm
+        navegar('seccion_3'); st.rerun()
+    if col2.button("Guardar y Continuar ➡️"):
+        st.session_state.fila_datos[16:39] = [ap_cult, rec_cult] + r_com + r_th + r_adm
+        navegar('seccion_5'); st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 5: LOGÍSTICA ---
+# --- SECCIÓN 5 ---
 elif st.session_state.pantalla == 'seccion_5':
     st.markdown("<h3 style='text-align: center; color: white;'>Logística y Transporte</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    resp_asiste = st.text_input("Responsable que asiste al evento", value=d[39])
-    cel_asiste = st.text_input("Celular del responsable", max_chars=10, value=d[40])
-    c_hora, c_conc = st.columns(2)
-    with c_hora: hora_salida = st.time_input("Hora de salida")
-    with c_conc: concentracion = st.text_input("Concentración", value=d[42])
+    with st.container():
+        st.markdown("#### 👤 Responsable en territorio")
+        c1, c2 = st.columns(2)
+        with c1: resp_asiste = st.text_input("Nombre del responsable que asiste", value=d[39])
+        with c2: cel_asiste = st.text_input("Celular", max_chars=10, value=d[40])
+        c3, c4 = st.columns(2)
+        with c3:
+            try: hs_def = datetime.strptime(d[41], "%H:%M").time() if d[41] else datetime.now().time()
+            except: hs_def = datetime.now().time()
+            hora_salida = st.time_input("Hora de salida hacia el evento", value=hs_def)
+        with c4: concentracion = st.text_input("Lugar de concentración", value=d[42])
     
-    st.write("---")
+    celulares = [cel_asiste] if cel_asiste else []
     
-    celulares_ingresados = []
-    if cel_asiste != "": celulares_ingresados.append(cel_asiste)
-    
-    def dibujar_logistica(nombre, max_num):
-        aplica = st.radio(f"¿Aplica {nombre}?", ["No aplica", "Aplica"], key=f"ap_{nombre}")
-        if aplica == "Aplica":
-            num = st.selectbox(f"N° {nombre}", list(range(1, max_num+1)), key=f"n_{nombre}")
-            contactos = []
-            for i in range(num):
-                c1, c2 = st.columns(2)
-                with c1: nom = st.text_input(f"Nombre {i+1}", key=f"nom_{nombre}_{i}")
-                with c2: cel = st.text_input(f"Celular {i+1}", max_chars=10, key=f"cel_{nombre}_{i}")
-                
-                if cel != "": celulares_ingresados.append(cel)
-                if nom or cel: contactos.append(f"{nom} ({cel})")
-            return ["Aplica", str(num), "\n".join(contactos)]
-        return ["No aplica", "", ""]
+    def dib_log(n, mx, idx):
+        with st.expander(f"🚐 Requerimiento de {n}", expanded=(d[idx]=="Aplica")):
+            ap = st.radio(f"¿Aplica {n}?", ["No aplica", "Aplica"], key=f"ap_{idx}", index=1 if d[idx]=="Aplica" else 0)
+            if ap == "Aplica":
+                v_n = int(d[idx+1]) if d[idx+1].isdigit() else 1
+                num = st.selectbox(f"N° de {n}", list(range(1, mx+1)), key=f"n_{idx}", index=v_n-1)
+                cont = []
+                for i in range(num):
+                    cx1, cx2 = st.columns(2)
+                    with cx1: nom = st.text_input(f"Chofer/Personal {i+1}", key=f"nm_{idx}_{i}")
+                    with cx2: cel = st.text_input(f"Celular {i+1}", max_chars=10, key=f"cl_{idx}_{i}")
+                    if cel: celulares.append(cel)
+                    if nom or cel: cont.append(f"{nom} ({cel})")
+                return ["Aplica", str(num), "\n".join(cont)]
+            return ["No aplica", "", ""]
 
-    res_cam = dibujar_logistica("Camionetas", 15) 
-    st.write("---")
-    res_bus = dibujar_logistica("Busetas", 15) 
-    st.write("---")
-    res_aux = dibujar_logistica("Auxiliares", 50) 
-    st.write("---")
+    r_cam = dib_log("Camionetas", 15, 43)
+    r_bus = dib_log("Busetas", 15, 46)
+    r_aux = dib_log("Auxiliares", 50, 49)
     
-    insumos = st.text_area("Detalle de los insumos solicitados", value=d[51])
-    ubicacion = st.text_area("Ubicación (detallada)", value=d[52])
+    with st.container():
+        st.markdown("#### 📋 Detalles Operativos")
+        insumos = st.text_area("Descripción y requerimientos del evento (Resumen e insumos)", value=d[52], height=150)
+        ubicacion = st.text_input("Ubicación exacta / Link de Maps", value=d[53])
 
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
-    with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
-    
-    if btn_guardar or btn_regresar:
-        hay_error_celular = False
-        for c in celulares_ingresados:
-            if not c.isdigit() or len(c) != 10:
-                hay_error_celular = True
-                break
-                
-        if hay_error_celular:
-            st.error("❌ Todo número de celular ingresado en esta sección debe tener exactamente 10 dígitos numéricos.")
+    st.write("---")
+    col1, col2 = st.columns(2)
+    if col1.button("⬅️ Regresar y Guardar"):
+        if any(not c.isdigit() or len(c)!=10 for c in celulares): st.error("❌ Los celulares deben tener 10 números.")
         else:
-            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M"), concentracion] + res_cam + res_bus + res_aux + [insumos, ubicacion]
-            
-            if btn_guardar: navegar('seccion_6')
-            if btn_regresar: navegar('seccion_4')
-            st.rerun()
-            
+            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M"), concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
+            navegar('seccion_4'); st.rerun()
+    if col2.button("Guardar y Continuar ➡️"):
+        if any(not c.isdigit() or len(c)!=10 for c in celulares): st.error("❌ Los celulares deben tener 10 números.")
+        else:
+            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M"), concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
+            navegar('seccion_6'); st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 6: EVALUACIÓN Y FIN CON ELIMINAR ---
+# --- SECCIÓN 6: EVALUACIÓN, FIN Y DESCARGAS ---
 elif st.session_state.pantalla == 'seccion_6':
-    st.markdown("<h3 style='text-align: center; color: white;'>Evaluación del Evento</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: white;'>Cierre y Evaluación del Evento</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"])
-    obs = st.text_area("Observaciones", value=d[54])
+    with st.container():
+        nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"], index=4 if d[53]=="" else int(d[53])-1)
+        obs = st.text_area("Observaciones Finales", value=d[54])
     
+    # BOTONES DE DESCARGA PDF 
+    st.markdown("#### 📥 Descargar Documentos Generados")
+    col_pdf1, col_pdf2 = st.columns(2)
+    with col_pdf1:
+        pdf_ruta = generar_pdf_hoja_ruta(d)
+        st.download_button(label="📄 Descargar Hoja de Ruta Operativa", data=pdf_ruta, file_name=f"Hoja_Ruta_{d[4]}.pdf", mime="application/pdf")
+    with col_pdf2:
+        pdf_exp = generar_pdf_expediente(d)
+        st.download_button(label="📑 Descargar Expediente Completo", data=pdf_exp, file_name=f"Expediente_{d[4]}.pdf", mime="application/pdf")
+
     st.write("---")
-    col_btn1, col_btn2, col_btn3 = st.columns(3)
-    with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
-    with col_btn2: btn_terminar = st.button("TERMINADO ✔️")
-    with col_btn3: btn_eliminar = st.button("🗑️ Eliminar Evento")
+    c1, c2, c3 = st.columns(3)
+    with c1: btn_regresar = st.button("⬅️ Regresar y Guardar")
+    with c2: btn_terminar = st.button("TERMINADO ✔️")
+    with c3: btn_eliminar = st.button("🗑️ Eliminar Evento")
     
-    # --- LÓGICA DE ELIMINAR CON CONFIRMACIÓN ---
-    if btn_eliminar:
-        st.session_state.confirmar_eliminar = True
+    if btn_eliminar: st.session_state.confirmar_eliminar = True
         
     if st.session_state.confirmar_eliminar:
         st.warning("⚠️ ¿Estás completamente seguro de que deseas eliminar este evento? Esta acción no se puede deshacer.")
-        col_conf1, col_conf2 = st.columns(2)
-        with col_conf1:
+        cx1, cx2 = st.columns(2)
+        with cx1:
             if st.button("✔️ Sí, eliminar permanentemente"):
                 if st.session_state.fila_actual:
                     try:
                         hoja_datos.delete_rows(st.session_state.fila_actual)
-                        total_filas = len(hoja_datos.col_values(1))
-                        if total_filas > 1:
-                            nuevos_nums = [[str(i)] for i in range(1, total_filas)]
-                            hoja_datos.update(values=nuevos_nums, range_name=f"A2:A{total_filas}")
-                        st.success("🗑️ Evento borrado permanentemente y numeración actualizada.")
-                        reset_app()
-                    except Exception as e:
-                        st.error(f"Error al intentar borrar: {e}")
-        with col_conf2:
-            if st.button("❌ Cancelar"):
-                st.session_state.confirmar_eliminar = False
-                st.rerun()
+                        tot = len(hoja_datos.col_values(1))
+                        if tot > 1: hoja_datos.update(values=[[str(i)] for i in range(1, tot)], range_name=f"A2:A{tot}")
+                        st.success("🗑️ Evento borrado."); reset_app()
+                    except: st.error("Error al borrar.")
+        with cx2:
+            if st.button("❌ Cancelar"): st.session_state.confirmar_eliminar = False; st.rerun()
 
-    # --- LÓGICA DE TERMINAR Y REGRESAR ---
     if not st.session_state.confirmar_eliminar and (btn_terminar or btn_regresar):
         st.session_state.fila_datos[53] = nivel_ejec[0]
         st.session_state.fila_datos[54] = obs
-        
         if btn_terminar:
-            # Pone la etiqueta de "Finalizado" que reemplaza la de "En proceso"
             st.session_state.fila_datos[59] = "Finalizado"
-            guardar_en_excel()
-            st.success("🎉 ¡Evento Finalizado y Guardado Exitosamente!")
-            reset_app()
-        
-        if btn_regresar:
-            navegar('seccion_5')
-            st.rerun()
+            guardar_en_excel(); st.success("🎉 ¡Evento Finalizado!"); reset_app()
+        if btn_regresar: navegar('seccion_5'); st.rerun()
 
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
