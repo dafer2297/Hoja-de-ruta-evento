@@ -23,14 +23,10 @@ def agregar_fondo(imagen_archivo):
                 background-position: center;
                 background-attachment: fixed;
             }}
-            .stButton>button {{ width: 100%; }}
-            
-            /* EFECTO DE LEVITACIÓN PARA LAS IMÁGENES */
-            [data-testid="stImage"] img {{
-                transition: transform 0.3s ease-in-out;
-            }}
-            [data-testid="stImage"] img:hover {{
-                transform: translateY(-15px);
+            /* Alineación perfecta de botones bajo los íconos (sin levitación) */
+            .stButton>button {{ 
+                width: 100%; 
+                margin-top: -10px;
             }}
             </style>
             """,
@@ -97,7 +93,8 @@ if st.session_state.pantalla == 'inicio':
         try: st.image("logo_superior.png", use_container_width=True)
         except: pass
             
-    st.markdown("<h2 style='text-align: center; color: white;'>Seleccione su Área</h2>", unsafe_allow_html=True)
+    # CORRECCIÓN DE MAYÚSCULAS Y MINÚSCULAS
+    st.markdown("<h2 style='text-align: center; color: white;'>Seleccione su área</h2>", unsafe_allow_html=True)
     st.write("---") 
     col1, col2 = st.columns(2)
     with col1:
@@ -142,33 +139,51 @@ elif st.session_state.pantalla == 'buscador_eventos':
     lista_resp = ["Responsable 1", "Responsable 2", "Responsable 3", "Responsable 4", "Responsable 5"] if st.session_state.area_seleccionada == "Culturas y Patrimonio" else ["Responsable 6", "Responsable 7", "Responsable 8"]
     resp_busqueda = st.selectbox("Seleccione el Responsable", lista_resp)
     
-    todos_los_datos = hoja_datos.get_all_values()
-    eventos_encontrados = []
-    for i in range(1, len(todos_los_datos)):
-        fila = todos_los_datos[i]
-        if len(fila) > 3 and fila[1] == st.session_state.area_seleccionada and fila[3] == resp_busqueda:
-            if len(fila) < 60 or fila[59] != "Finalizado":
-                eventos_encontrados.append((i + 1, fila))
-    
-    eventos_encontrados.reverse()
-    
-    if eventos_encontrados:
-        opciones_mostrar = {f"{ev[1][4]} (Fecha: {ev[1][10]})": ev for ev in eventos_encontrados}
-        evento_seleccionado = st.selectbox("Seleccione el Evento", list(opciones_mostrar.keys()))
+    try:
+        todos_los_datos = hoja_datos.get_all_values()
+        eventos_encontrados_dict = {}
         
-        col1, col2 = st.columns(2)
-        with col2:
-            if st.button("Abrir Evento"):
-                fila_real, datos_fila = opciones_mostrar[evento_seleccionado]
-                st.session_state.fila_actual = fila_real
-                mientras_datos = datos_fila + [""] * (60 - len(datos_fila))
-                st.session_state.fila_datos = mientras_datos[:60]
-                st.session_state.pantalla = 'seccion_2'
+        for i in range(1, len(todos_los_datos)):
+            fila = todos_los_datos[i]
+            # Solo leemos si tiene al menos el nombre (Columna E, índice 4)
+            if len(fila) > 4:
+                if fila[1] == st.session_state.area_seleccionada and fila[3] == resp_busqueda:
+                    if len(fila) < 60 or fila[59] != "Finalizado":
+                        n_registro = fila[0]
+                        nombre_ev = fila[4]
+                        fecha_ev = fila[10] if len(fila) > 10 else "Sin Fecha"
+                        
+                        # Llave única con el número de registro para que no se oculten
+                        unique_key = f"{nombre_ev} (Fecha: {fecha_ev} - Registro N° {n_registro})"
+                        eventos_encontrados_dict[unique_key] = (i + 1, fila)
+        
+        opciones_eventos = list(eventos_encontrados_dict.keys())
+        opciones_eventos.reverse()
+        
+        if opciones_eventos:
+            evento_seleccionado = st.selectbox("Seleccione el Evento", opciones_eventos)
+            
+            col1, col2 = st.columns(2)
+            with col2:
+                if st.button("Abrir Evento"):
+                    fila_real, datos_fila = eventos_encontrados_dict[evento_seleccionado]
+                    st.session_state.fila_actual = fila_real
+                    mientras_datos = datos_fila + [""] * (60 - len(datos_fila))
+                    st.session_state.fila_datos = mientras_datos[:60]
+                    st.session_state.pantalla = 'seccion_2'
+                    st.rerun()
+            with col1:
+                if st.button("Regresar"):
+                    st.session_state.pantalla = 'opciones_evento'
+                    st.rerun()
+        else:
+            st.warning("Aún no ha creado eventos en proceso.")
+            if st.button("Regresar"):
+                st.session_state.pantalla = 'opciones_evento'
                 st.rerun()
-    else:
-        st.info("No se encontraron eventos en proceso para este responsable.")
-        
-    with col1:
+                
+    except Exception as e:
+        st.error("Hubo un problema al buscar los datos en el Excel.")
         if st.button("Regresar"):
             st.session_state.pantalla = 'opciones_evento'
             st.rerun()
@@ -185,7 +200,8 @@ elif st.session_state.pantalla == 'seccion_2':
     d = st.session_state.fila_datos
     
     resp_index = lista_resp.index(d[3]) if d[3] in lista_resp else 0
-    responsable = st.selectbox("Responsable de Área", lista_resp, index=resp_index)
+    # CORRECCIÓN DE MAYÚSCULAS Y MINÚSCULAS
+    responsable = st.selectbox("Responsable de área", lista_resp, index=resp_index)
     
     nombre_evento = st.text_input("Nombre del evento", value=d[4])
     tipo_evento = st.selectbox("Tipo de evento", ["Propio", "Apoyo"], index=0 if d[5] != "Apoyo" else 1)
@@ -209,11 +225,11 @@ elif st.session_state.pantalla == 'seccion_2':
         btn_guardar = st.button("Guardar y Continuar ➡️")
         
     if btn_guardar or btn_regresar:
-        # Validación ESTRICTA de 10 dígitos
-        if celular_org != "" and (not celular_org.isdigit() or len(celular_org) != 10):
+        # --- CANDADO DE SEGURIDAD SECCIÓN 2 ---
+        if nombre_evento.strip() == "" or nombre_org.strip() == "" or celular_org.strip() == "" or lugar_evento.strip() == "":
+            st.error("❌ Alto ahí: Debes llenar todos los campos de esta sección (Nombre, Organizador, Celular y Lugar) para poder crear el evento y continuar.")
+        elif not celular_org.isdigit() or len(celular_org) != 10:
             st.error("❌ El celular del organizador debe tener exactamente 10 dígitos numéricos.")
-        elif nombre_evento == "":
-            st.error("❌ El nombre del evento es obligatorio.")
         else:
             meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
             mes_texto = meses[fecha_evento.month - 1]
@@ -253,7 +269,6 @@ elif st.session_state.pantalla == 'seccion_3':
     entidades_str = ""; solicitudes_str = ""; f_sol_str = ""; f_resp_str = ""
     
     if aplica == "Aplica":
-        # Selector de número de entidades (Máximo 8)
         num_entidades = st.selectbox("¿Cuántas entidades externas?", list(range(1, 9)))
         
         lista_nombres = []; lista_solicitudes = []; lista_f_sol = []; lista_f_resp = []
@@ -266,13 +281,12 @@ elif st.session_state.pantalla == 'seccion_3':
             with c1: fs = st.date_input(f"Fecha de solicitud {i+1}", key=f"fs_{i}")
             with c2: fr = st.date_input(f"Fecha de respuesta {i+1}", key=f"fr_{i}")
             
-            if nom != "": # Solo lo agrupa si escribieron el nombre
+            if nom != "": 
                 lista_nombres.append(f"{i+1}. {nom}")
                 lista_solicitudes.append(f"{i+1}. {sol}")
                 lista_f_sol.append(f"{i+1}. {fs.strftime('%d/%m/%Y')}")
                 lista_f_resp.append(f"{i+1}. {fr.strftime('%d/%m/%Y')}")
                 
-        # Une las listas con saltos de línea para que quede perfecto en la celda de Excel
         entidades_str = "\n".join(lista_nombres)
         solicitudes_str = "\n".join(lista_solicitudes)
         f_sol_str = "\n".join(lista_f_sol)
@@ -360,7 +374,6 @@ elif st.session_state.pantalla == 'seccion_5':
     
     st.write("---")
     
-    # Recolector de todos los celulares para validarlos al final
     celulares_ingresados = []
     if cel_asiste != "": celulares_ingresados.append(cel_asiste)
     
@@ -379,11 +392,11 @@ elif st.session_state.pantalla == 'seccion_5':
             return ["Aplica", str(num), "\n".join(contactos)]
         return ["No aplica", "", ""]
 
-    res_cam = dibujar_logistica("Camionetas", 15) # Máximo 15
+    res_cam = dibujar_logistica("Camionetas", 15) 
     st.write("---")
-    res_bus = dibujar_logistica("Busetas", 15) # Máximo 15
+    res_bus = dibujar_logistica("Busetas", 15) 
     st.write("---")
-    res_aux = dibujar_logistica("Auxiliares", 50) # Máximo 50
+    res_aux = dibujar_logistica("Auxiliares", 50) 
     st.write("---")
     
     insumos = st.text_area("Detalle de los insumos solicitados", value=d[51])
@@ -394,7 +407,6 @@ elif st.session_state.pantalla == 'seccion_5':
     with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
     
     if btn_guardar or btn_regresar:
-        # Validación de que TODOS los celulares tengan exactamente 10 dígitos numéricos
         hay_error_celular = False
         for c in celulares_ingresados:
             if not c.isdigit() or len(c) != 10:
