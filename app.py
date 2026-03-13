@@ -52,14 +52,11 @@ hoja_datos = conectar_excel()
 # ==========================================
 # 2. FUNCIONES AUXILIARES Y MEMORIA
 # ==========================================
-# Memoria de navegación
 if 'pantalla' not in st.session_state: st.session_state.pantalla = 'inicio'
 if 'area_seleccionada' not in st.session_state: st.session_state.area_seleccionada = None
 if 'fila_actual' not in st.session_state: st.session_state.fila_actual = None
 if 'modo' not in st.session_state: st.session_state.modo = "nuevo"
 
-# Fila temporal de 60 columnas (A hasta BH)
-# Inicializamos vacía
 if 'fila_datos' not in st.session_state:
     st.session_state.fila_datos = [""] * 60
 
@@ -74,7 +71,6 @@ def calcular_dias(fecha_inicio, fecha_fin):
 
 def guardar_en_excel():
     if st.session_state.fila_actual:
-        # Actualizamos desde la columna A hasta la BH
         rango = f"A{st.session_state.fila_actual}:BH{st.session_state.fila_actual}"
         hoja_datos.update(values=[st.session_state.fila_datos], range_name=rango)
 
@@ -118,7 +114,7 @@ elif st.session_state.pantalla == 'opciones_evento':
     with col1:
         if st.button("Nuevo Evento"):
             st.session_state.modo = "nuevo"
-            st.session_state.fila_datos = [""] * 60 # Limpiar datos
+            st.session_state.fila_datos = [""] * 60
             st.session_state.pantalla = 'seccion_2'
             st.rerun()
     with col2:
@@ -138,18 +134,14 @@ elif st.session_state.pantalla == 'buscador_eventos':
     lista_resp = ["Responsable 1", "Responsable 2", "Responsable 3", "Responsable 4", "Responsable 5"] if st.session_state.area_seleccionada == "Culturas y Patrimonio" else ["Responsable 6", "Responsable 7", "Responsable 8"]
     resp_busqueda = st.selectbox("Seleccione el Responsable", lista_resp)
     
-    # Buscar en Excel
     todos_los_datos = hoja_datos.get_all_values()
     eventos_encontrados = []
-    # Empezamos desde la fila 2 (índice 1) para saltar encabezados
     for i in range(1, len(todos_los_datos)):
         fila = todos_los_datos[i]
-        # Columna D (índice 3) es Responsable, Columna B (índice 1) es Área, Col BH (índice 59) es Finalizado
         if len(fila) > 3 and fila[1] == st.session_state.area_seleccionada and fila[3] == resp_busqueda:
-            if len(fila) < 60 or fila[59] != "Finalizado": # Solo los que no están terminados
-                eventos_encontrados.append((i + 1, fila)) # Guardamos el número de fila real (i+1)
+            if len(fila) < 60 or fila[59] != "Finalizado":
+                eventos_encontrados.append((i + 1, fila))
     
-    # Mostrar resultados del más nuevo al más viejo (invertimos la lista)
     eventos_encontrados.reverse()
     
     if eventos_encontrados:
@@ -161,7 +153,6 @@ elif st.session_state.pantalla == 'buscador_eventos':
             if st.button("Abrir Evento"):
                 fila_real, datos_fila = opciones_mostrar[evento_seleccionado]
                 st.session_state.fila_actual = fila_real
-                # Rellenar a 60 espacios por si la fila en Excel es más corta
                 mientras_datos = datos_fila + [""] * (60 - len(datos_fila))
                 st.session_state.fila_datos = mientras_datos[:60]
                 st.session_state.pantalla = 'seccion_2'
@@ -174,9 +165,8 @@ elif st.session_state.pantalla == 'buscador_eventos':
             st.session_state.pantalla = 'opciones_evento'
             st.rerun()
 
-
 # ==========================================
-# 4. FORMULARIOS (SECCIONES 2 A 6)
+# 4. FORMULARIOS (SECCIONES 2 A 6) - SIN ST.FORM PARA QUE SEAN DINÁMICOS
 # ==========================================
 
 # --- SECCIÓN 2: INFORMACIÓN DEL EVENTO ---
@@ -184,253 +174,238 @@ elif st.session_state.pantalla == 'seccion_2':
     st.markdown("<h3 style='text-align: center; color: white;'>Información del Evento</h3>", unsafe_allow_html=True)
     
     lista_resp = ["Responsable 1", "Responsable 2", "Responsable 3", "Responsable 4", "Responsable 5"] if st.session_state.area_seleccionada == "Culturas y Patrimonio" else ["Responsable 6", "Responsable 7", "Responsable 8"]
-    
-    # Cargar datos previos si es edición
     d = st.session_state.fila_datos
     
-    with st.form("form_sec_2"):
-        resp_index = lista_resp.index(d[3]) if d[3] in lista_resp else 0
-        responsable = st.selectbox("Responsable de Área", lista_resp, index=resp_index)
+    resp_index = lista_resp.index(d[3]) if d[3] in lista_resp else 0
+    responsable = st.selectbox("Responsable de Área", lista_resp, index=resp_index)
+    
+    nombre_evento = st.text_input("Nombre del evento", value=d[4])
+    tipo_evento = st.selectbox("Tipo de evento", ["Propio", "Apoyo"], index=0 if d[5] != "Apoyo" else 1)
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        inicio_org = st.date_input("Inicio organización del evento")
+        fecha_evento = st.date_input("Fecha del evento")
+    with c2:
+        nombre_org = st.text_input("Nombre del organizador", value=d[7])
+        hora_evento = st.time_input("Hora del evento")
         
-        nombre_evento = st.text_input("Nombre del evento", value=d[4])
-        tipo_evento = st.selectbox("Tipo de evento", ["Propio", "Apoyo"], index=0 if d[5] != "Apoyo" else 1)
+    celular_org = st.text_input("Celular del organizador", max_chars=10, value=d[8])
+    lugar_evento = st.text_input("Lugar del evento", value=d[9])
+    
+    st.write("---")
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        btn_regresar = st.button("⬅️ Regresar y Guardar")
+    with col_btn2:
+        btn_guardar = st.button("Guardar y Continuar ➡️")
         
-        c1, c2 = st.columns(2)
-        with c1:
-            inicio_org = st.date_input("Inicio organización del evento") # Col G
-            fecha_evento = st.date_input("Fecha del evento") # Col K
-        with c2:
-            nombre_org = st.text_input("Nombre del organizador", value=d[7])
-            hora_evento = st.time_input("Hora del evento") # Col L
+    if btn_guardar or btn_regresar:
+        if celular_org != "" and not celular_org.isdigit():
+            st.error("❌ El celular solo debe contener números.")
+        elif nombre_evento == "":
+            st.error("❌ El nombre del evento es obligatorio.")
+        else:
+            meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+            mes_texto = meses[fecha_evento.month - 1]
+            fecha_org_str = inicio_org.strftime("%d/%m/%Y")
+            fecha_ev_str = fecha_evento.strftime("%d/%m/%Y")
+            hora_str = hora_evento.strftime("%H:%M")
             
-        celular_org = st.text_input("Celular del organizador", max_chars=10, value=d[8])
-        lugar_evento = st.text_input("Lugar del evento", value=d[9])
-        
-        st.write("---")
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn2:
-            btn_guardar = st.form_submit_button("Guardar y Continuar ➡️")
-        with col_btn1:
-            btn_regresar = st.form_submit_button("⬅️ Regresar y Guardar")
+            st.session_state.fila_datos[1] = st.session_state.area_seleccionada
+            st.session_state.fila_datos[2] = mes_texto
+            st.session_state.fila_datos[3] = responsable
+            st.session_state.fila_datos[4] = nombre_evento
+            st.session_state.fila_datos[5] = tipo_evento
+            st.session_state.fila_datos[6] = fecha_org_str
+            st.session_state.fila_datos[7] = nombre_org
+            st.session_state.fila_datos[8] = celular_org
+            st.session_state.fila_datos[9] = lugar_evento
+            st.session_state.fila_datos[10] = fecha_ev_str
+            st.session_state.fila_datos[11] = hora_str
             
-        if btn_guardar or btn_regresar:
-            if celular_org != "" and not celular_org.isdigit():
-                st.error("❌ El celular solo debe contener números.")
-            elif nombre_evento == "":
-                st.error("❌ El nombre del evento es obligatorio.")
-            else:
-                # Datos autogenerados
-                meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-                mes_texto = meses[fecha_evento.month - 1]
-                fecha_org_str = inicio_org.strftime("%d/%m/%Y")
-                fecha_ev_str = fecha_evento.strftime("%d/%m/%Y")
-                hora_str = hora_evento.strftime("%H:%M")
-                
-                # Actualizar datos en memoria
-                st.session_state.fila_datos[1] = st.session_state.area_seleccionada # Area
-                st.session_state.fila_datos[2] = mes_texto # Mes
-                st.session_state.fila_datos[3] = responsable
-                st.session_state.fila_datos[4] = nombre_evento
-                st.session_state.fila_datos[5] = tipo_evento
-                st.session_state.fila_datos[6] = fecha_org_str
-                st.session_state.fila_datos[7] = nombre_org
-                st.session_state.fila_datos[8] = celular_org
-                st.session_state.fila_datos[9] = lugar_evento
-                st.session_state.fila_datos[10] = fecha_ev_str
-                st.session_state.fila_datos[11] = hora_str
-                
-                # Si es nuevo, crear fila. Si es edición, se actualiza luego.
-                if st.session_state.modo == "nuevo" and not st.session_state.fila_actual:
-                    # Generamos el N° (Contamos filas actuales)
-                    num_filas = len(hoja_datos.col_values(1))
-                    st.session_state.fila_datos[0] = str(num_filas)
-                    hoja_datos.append_row(st.session_state.fila_datos)
-                    st.session_state.fila_actual = num_filas + 1 # Guardar coordenada
-                
-                if btn_guardar: navegar('seccion_3')
-                if btn_regresar: navegar('opciones_evento')
-                st.rerun()
+            if st.session_state.modo == "nuevo" and not st.session_state.fila_actual:
+                num_filas = len(hoja_datos.col_values(1))
+                st.session_state.fila_datos[0] = str(num_filas)
+                hoja_datos.append_row(st.session_state.fila_datos)
+                st.session_state.fila_actual = num_filas + 1
+            
+            if btn_guardar: navegar('seccion_3')
+            if btn_regresar: navegar('opciones_evento')
+            st.rerun()
 
 # --- SECCIÓN 3: EXTERNAS ---
 elif st.session_state.pantalla == 'seccion_3':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Entidades Externas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    with st.form("form_sec_3"):
-        aplica = st.radio("¿Aplica?", ["No aplica", "Aplica"], index=1 if d[12] != "" else 0)
-        entidad = ""; solicitud = ""; f_solicitud = date.today(); f_respuesta = date.today()
+    aplica = st.radio("¿Aplica?", ["No aplica", "Aplica"], index=1 if d[12] != "" else 0)
+    entidad = ""; solicitud = ""; f_solicitud = date.today(); f_respuesta = date.today()
+    
+    if aplica == "Aplica":
+        entidad = st.text_input("Entidad externa", value=d[12])
+        solicitud = st.text_area("Solicitud realizada", value=d[13])
+        c1, c2 = st.columns(2)
+        with c1: f_solicitud = st.date_input("Fecha de solicitud")
+        with c2: f_respuesta = st.date_input("Fecha de respuesta")
         
+    st.write("---")
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
+    with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
+    
+    if btn_guardar or btn_regresar:
         if aplica == "Aplica":
-            entidad = st.text_input("Entidad externa", value=d[12])
-            solicitud = st.text_area("Solicitud realizada", value=d[13])
-            c1, c2 = st.columns(2)
-            with c1: f_solicitud = st.date_input("Fecha de solicitud")
-            with c2: f_respuesta = st.date_input("Fecha de respuesta")
+            st.session_state.fila_datos[12] = entidad
+            st.session_state.fila_datos[13] = solicitud
+            st.session_state.fila_datos[14] = f_solicitud.strftime("%d/%m/%Y")
+            st.session_state.fila_datos[15] = f_respuesta.strftime("%d/%m/%Y")
+        else:
+            st.session_state.fila_datos[12:16] = ["", "", "", ""]
             
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1: btn_regresar = st.form_submit_button("⬅️ Regresar y Guardar")
-        with col_btn2: btn_guardar = st.form_submit_button("Guardar y Continuar ➡️")
-        
-        if btn_guardar or btn_regresar:
-            if aplica == "Aplica":
-                st.session_state.fila_datos[12] = entidad
-                st.session_state.fila_datos[13] = solicitud
-                st.session_state.fila_datos[14] = f_solicitud.strftime("%d/%m/%Y")
-                st.session_state.fila_datos[15] = f_respuesta.strftime("%d/%m/%Y")
-            else:
-                st.session_state.fila_datos[12:16] = ["", "", "", ""]
-                
-            if btn_guardar: navegar('seccion_4')
-            if btn_regresar: navegar('seccion_2')
-            st.rerun()
+        if btn_guardar: navegar('seccion_4')
+        if btn_regresar: navegar('seccion_2')
+        st.rerun()
 
 # --- SECCIÓN 4: INTERNAS ---
 elif st.session_state.pantalla == 'seccion_4':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Áreas Internas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    with st.form("form_sec_4"):
-        # 1. Culturas
-        st.markdown("**1. Dirección Culturas, Patrimonio y Recreación**")
-        ap_culturas = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="r_cult", index=1 if d[16]=="Aplica" else 0)
-        rec_culturas = st.text_input("Recursos entregados", value=d[17]) if ap_culturas == "Aplica" else ""
-        
-        st.write("---")
-        # Función interna para dibujar las otras 3 direcciones y no repetir código
-        def dibujar_direccion(nombre, idx_base):
-            st.markdown(f"**{nombre}**")
-            aplica = st.radio("¿Aplica?", ["No aplica", "Aplica"], key=f"ap_{idx_base}", index=1 if d[idx_base]=="Aplica" else 0)
-            if aplica == "Aplica":
-                sol = st.text_input("Solicitud realizada", value=d[idx_base+1], key=f"s_{idx_base}")
-                c1, c2 = st.columns(2)
-                with c1: f_sol = st.date_input("Fecha solicitud", key=f"fs_{idx_base}")
-                with c2: f_res = st.date_input("Fecha respuesta", key=f"fr_{idx_base}")
-                rec = st.text_input("Recursos Entregados", value=d[idx_base+4], key=f"r_{idx_base}")
-                
-                cumplio = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if d[idx_base+5]=="No" else 0)
-                nivel = "5"
-                if cumplio == "No":
-                    nivel = st.selectbox("Nivel de cumplimiento", ["1 (20%)", "2 (40%)", "3 (60%)", "4 (80%)"], key=f"n_{idx_base}")
-                    nivel = nivel[0]
-                else:
-                    st.info("Nivel automático: 5 (100%)")
-                return ["Aplica", sol, f_sol.strftime("%d/%m/%Y"), f_res.strftime("%d/%m/%Y"), rec, cumplio, nivel]
-            return ["No aplica", "", "", "", "", "", ""]
-
-        # Dibujamos las 3 (Comunicación, TH, Administración)
-        res_com = dibujar_direccion("2. Dirección Comunicación", 18)
-        st.write("---")
-        res_th = dibujar_direccion("3. Dirección de Talento Humano", 25)
-        st.write("---")
-        res_adm = dibujar_direccion("4. Dirección de Administración", 32)
-
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1: btn_regresar = st.form_submit_button("⬅️ Regresar y Guardar")
-        with col_btn2: btn_guardar = st.form_submit_button("Guardar y Continuar ➡️")
-        
-        if btn_guardar or btn_regresar:
-            st.session_state.fila_datos[16] = ap_culturas
-            st.session_state.fila_datos[17] = rec_culturas
-            st.session_state.fila_datos[18:25] = res_com
-            st.session_state.fila_datos[25:32] = res_th
-            st.session_state.fila_datos[32:39] = res_adm
+    # 1. Culturas
+    st.markdown("**1. Dirección Culturas, Patrimonio y Recreación**")
+    ap_culturas = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="r_cult", index=1 if d[16]=="Aplica" else 0)
+    rec_culturas = st.text_input("Recursos entregados", value=d[17]) if ap_culturas == "Aplica" else ""
+    
+    st.write("---")
+    def dibujar_direccion(nombre, idx_base):
+        st.markdown(f"**{nombre}**")
+        aplica = st.radio("¿Aplica?", ["No aplica", "Aplica"], key=f"ap_{idx_base}", index=1 if d[idx_base]=="Aplica" else 0)
+        if aplica == "Aplica":
+            sol = st.text_input("Solicitud realizada", value=d[idx_base+1], key=f"s_{idx_base}")
+            c1, c2 = st.columns(2)
+            with c1: f_sol = st.date_input("Fecha solicitud", key=f"fs_{idx_base}")
+            with c2: f_res = st.date_input("Fecha respuesta", key=f"fr_{idx_base}")
+            rec = st.text_input("Recursos Entregados", value=d[idx_base+4], key=f"r_{idx_base}")
             
-            if btn_guardar: navegar('seccion_5')
-            if btn_regresar: navegar('seccion_3')
-            st.rerun()
+            cumplio = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if d[idx_base+5]=="No" else 0)
+            nivel = "5"
+            if cumplio == "No":
+                nivel = st.selectbox("Nivel de cumplimiento", ["1 (20%)", "2 (40%)", "3 (60%)", "4 (80%)"], key=f"n_{idx_base}")
+                nivel = nivel[0]
+            else:
+                st.info("Nivel automático: 5 (100%)")
+            return ["Aplica", sol, f_sol.strftime("%d/%m/%Y"), f_res.strftime("%d/%m/%Y"), rec, cumplio, nivel]
+        return ["No aplica", "", "", "", "", "", ""]
+
+    res_com = dibujar_direccion("2. Dirección Comunicación", 18)
+    st.write("---")
+    res_th = dibujar_direccion("3. Dirección de Talento Humano", 25)
+    st.write("---")
+    res_adm = dibujar_direccion("4. Dirección de Administración", 32)
+
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
+    with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
+    
+    if btn_guardar or btn_regresar:
+        st.session_state.fila_datos[16] = ap_culturas
+        st.session_state.fila_datos[17] = rec_culturas
+        st.session_state.fila_datos[18:25] = res_com
+        st.session_state.fila_datos[25:32] = res_th
+        st.session_state.fila_datos[32:39] = res_adm
+        
+        if btn_guardar: navegar('seccion_5')
+        if btn_regresar: navegar('seccion_3')
+        st.rerun()
 
 # --- SECCIÓN 5: LOGÍSTICA ---
 elif st.session_state.pantalla == 'seccion_5':
     st.markdown("<h3 style='text-align: center; color: white;'>Logística y Transporte</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    with st.form("form_sec_5"):
-        resp_asiste = st.text_input("Responsable que asiste al evento", value=d[39])
-        cel_asiste = st.text_input("Celular del responsable", max_chars=10, value=d[40])
-        c_hora, c_conc = st.columns(2)
-        with c_hora: hora_salida = st.time_input("Hora de salida")
-        with c_conc: concentracion = st.text_input("Concentración", value=d[42])
-        
-        st.write("---")
-        # Función para vehículos/auxiliares
-        def dibujar_logistica(nombre, max_num):
-            aplica = st.radio(f"¿Aplica {nombre}?", ["No aplica", "Aplica"], key=f"ap_{nombre}")
-            if aplica == "Aplica":
-                num = st.selectbox(f"N° {nombre}", list(range(1, max_num+1)), key=f"n_{nombre}")
-                contactos = []
-                for i in range(num):
-                    c1, c2 = st.columns(2)
-                    with c1: nom = st.text_input(f"Nombre {i+1}", key=f"nom_{nombre}_{i}")
-                    with c2: cel = st.text_input(f"Celular {i+1}", max_chars=10, key=f"cel_{nombre}_{i}")
-                    if nom or cel: contactos.append(f"{nom} ({cel})")
-                return ["Aplica", str(num), "\n".join(contactos)]
-            return ["No aplica", "", ""]
+    resp_asiste = st.text_input("Responsable que asiste al evento", value=d[39])
+    cel_asiste = st.text_input("Celular del responsable", max_chars=10, value=d[40])
+    c_hora, c_conc = st.columns(2)
+    with c_hora: hora_salida = st.time_input("Hora de salida")
+    with c_conc: concentracion = st.text_input("Concentración", value=d[42])
+    
+    st.write("---")
+    def dibujar_logistica(nombre, max_num):
+        aplica = st.radio(f"¿Aplica {nombre}?", ["No aplica", "Aplica"], key=f"ap_{nombre}")
+        if aplica == "Aplica":
+            num = st.selectbox(f"N° {nombre}", list(range(1, max_num+1)), key=f"n_{nombre}")
+            contactos = []
+            for i in range(num):
+                c1, c2 = st.columns(2)
+                with c1: nom = st.text_input(f"Nombre {i+1}", key=f"nom_{nombre}_{i}")
+                with c2: cel = st.text_input(f"Celular {i+1}", max_chars=10, key=f"cel_{nombre}_{i}")
+                if nom or cel: contactos.append(f"{nom} ({cel})")
+            return ["Aplica", str(num), "\n".join(contactos)]
+        return ["No aplica", "", ""]
 
-        res_cam = dibujar_logistica("Camionetas", 10)
-        st.write("---")
-        res_bus = dibujar_logistica("Busetas", 10)
-        st.write("---")
-        res_aux = dibujar_logistica("Auxiliares", 20)
-        st.write("---")
-        
-        insumos = st.text_area("Detalle de los insumos solicitados", value=d[51])
-        ubicacion = st.text_area("Ubicación (detallada)", value=d[52])
+    res_cam = dibujar_logistica("Camionetas", 10)
+    st.write("---")
+    res_bus = dibujar_logistica("Busetas", 10)
+    st.write("---")
+    res_aux = dibujar_logistica("Auxiliares", 20)
+    st.write("---")
+    
+    insumos = st.text_area("Detalle de los insumos solicitados", value=d[51])
+    ubicacion = st.text_area("Ubicación (detallada)", value=d[52])
 
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1: btn_regresar = st.form_submit_button("⬅️ Regresar y Guardar")
-        with col_btn2: btn_guardar = st.form_submit_button("Guardar y Continuar ➡️")
-        
-        if btn_guardar or btn_regresar:
-            if cel_asiste != "" and not cel_asiste.isdigit():
-                st.error("❌ Los celulares deben contener solo números.")
-            else:
-                st.session_state.fila_datos[39] = resp_asiste
-                st.session_state.fila_datos[40] = cel_asiste
-                st.session_state.fila_datos[41] = hora_salida.strftime("%H:%M")
-                st.session_state.fila_datos[42] = concentracion
-                st.session_state.fila_datos[43:46] = res_cam
-                st.session_state.fila_datos[46:49] = res_bus
-                st.session_state.fila_datos[49:52] = res_aux
-                st.session_state.fila_datos[52] = insumos
-                st.session_state.fila_datos[53] = ubicacion
-                
-                if btn_guardar: navegar('seccion_6')
-                if btn_regresar: navegar('seccion_4')
-                st.rerun()
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
+    with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
+    
+    if btn_guardar or btn_regresar:
+        if cel_asiste != "" and not cel_asiste.isdigit():
+            st.error("❌ Los celulares deben contener solo números.")
+        else:
+            st.session_state.fila_datos[39] = resp_asiste
+            st.session_state.fila_datos[40] = cel_asiste
+            st.session_state.fila_datos[41] = hora_salida.strftime("%H:%M")
+            st.session_state.fila_datos[42] = concentracion
+            st.session_state.fila_datos[43:46] = res_cam
+            st.session_state.fila_datos[46:49] = res_bus
+            st.session_state.fila_datos[49:52] = res_aux
+            st.session_state.fila_datos[52] = insumos
+            st.session_state.fila_datos[53] = ubicacion
+            
+            if btn_guardar: navegar('seccion_6')
+            if btn_regresar: navegar('seccion_4')
+            st.rerun()
 
 # --- SECCIÓN 6: EVALUACIÓN Y FIN ---
 elif st.session_state.pantalla == 'seccion_6':
     st.markdown("<h3 style='text-align: center; color: white;'>Evaluación del Evento</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    with st.form("form_sec_6"):
-        nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"])
-        obs = st.text_area("Observaciones", value=d[54])
+    nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"])
+    obs = st.text_area("Observaciones", value=d[54])
+    
+    st.write("---")
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
+    with col_btn2: btn_terminar = st.button("TERMINADO ✔️")
+    
+    if btn_terminar or btn_regresar:
+        st.session_state.fila_datos[53] = nivel_ejec[0]
+        st.session_state.fila_datos[54] = obs
         
-        st.write("---")
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1: btn_regresar = st.form_submit_button("⬅️ Regresar y Guardar")
-        with col_btn2: btn_terminar = st.form_submit_button("TERMINADO ✔️")
+        if btn_terminar:
+            d = st.session_state.fila_datos
+            d[55] = calcular_dias(d[6], d[10])
+            d[56] = calcular_dias(d[20], d[21]) if d[18] == "Aplica" else ""
+            d[57] = calcular_dias(d[27], d[28]) if d[25] == "Aplica" else ""
+            d[58] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else ""
+            d[59] = "Finalizado"
+            
+            guardar_en_excel()
+            st.success("🎉 ¡Evento Finalizado y Guardado Exitosamente!")
+            st.session_state.pantalla = 'inicio'
         
-        if btn_terminar or btn_regresar:
-            st.session_state.fila_datos[53] = nivel_ejec[0] # Solo guarda el número
-            st.session_state.fila_datos[54] = obs
+        if btn_regresar:
+            navegar('seccion_5')
             
-            if btn_terminar:
-                # --- CÁLCULOS AUTOMÁTICOS DE LA SECCIÓN 7 ---
-                d = st.session_state.fila_datos
-                d[55] = calcular_dias(d[6], d[10]) # Días organización
-                d[56] = calcular_dias(d[20], d[21]) if d[18] == "Aplica" else "" # Comunicación
-                d[57] = calcular_dias(d[27], d[28]) if d[25] == "Aplica" else "" # TH
-                d[58] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else "" # Admin
-                
-                d[59] = "Finalizado" # Última columna BH
-                
-                guardar_en_excel()
-                st.success("🎉 ¡Evento Finalizado y Guardado Exitosamente!")
-                st.session_state.pantalla = 'inicio'
-            
-            if btn_regresar:
-                navegar('seccion_5')
-                
-            st.rerun()
+        st.rerun()
