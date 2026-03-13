@@ -23,7 +23,7 @@ def agregar_fondo(imagen_archivo):
                 background-position: center;
                 background-attachment: fixed;
             }}
-            /* Alineación perfecta de botones bajo los íconos (sin levitación) */
+            /* Alineación perfecta de botones bajo los íconos */
             .stButton>button {{ 
                 width: 100%; 
                 margin-top: -10px;
@@ -82,6 +82,14 @@ def navegar(destino):
     guardar_en_excel()
     st.session_state.pantalla = destino
 
+def reset_app():
+    # Limpia la memoria y vuelve a la primera pantalla
+    st.session_state.pantalla = 'inicio'
+    st.session_state.area_seleccionada = None
+    st.session_state.fila_actual = None
+    st.session_state.fila_datos = [""] * 60
+    st.rerun()
+
 # ==========================================
 # 3. PANTALLAS DE NAVEGACIÓN
 # ==========================================
@@ -93,7 +101,6 @@ if st.session_state.pantalla == 'inicio':
         try: st.image("logo_superior.png", use_container_width=True)
         except: pass
             
-    # CORRECCIÓN DE MAYÚSCULAS Y MINÚSCULAS
     st.markdown("<h2 style='text-align: center; color: white;'>Seleccione su área</h2>", unsafe_allow_html=True)
     st.write("---") 
     col1, col2 = st.columns(2)
@@ -123,21 +130,21 @@ elif st.session_state.pantalla == 'opciones_evento':
             st.session_state.pantalla = 'seccion_2'
             st.rerun()
     with col2:
-        if st.button("Evento en Proceso"):
+        if st.button("Buscar Eventos"):
             st.session_state.modo = "editar"
             st.session_state.pantalla = 'buscador_eventos'
             st.rerun()
+    
     st.write("---")
-    if st.button("Volver al Inicio"):
-        st.session_state.pantalla = 'inicio'
-        st.rerun()
+    if st.button("🏠 Volver al inicio"):
+        reset_app()
 
-# --- BUSCADOR DE EVENTOS EN PROCESO ---
+# --- BUSCADOR DE EVENTOS ---
 elif st.session_state.pantalla == 'buscador_eventos':
-    st.markdown("<h3 style='text-align: center; color: white;'>Seleccionar Evento en Proceso</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: white;'>Seleccionar evento</h3>", unsafe_allow_html=True)
     
     lista_resp = ["Responsable 1", "Responsable 2", "Responsable 3", "Responsable 4", "Responsable 5"] if st.session_state.area_seleccionada == "Culturas y Patrimonio" else ["Responsable 6", "Responsable 7", "Responsable 8"]
-    resp_busqueda = st.selectbox("Seleccione el Responsable", lista_resp)
+    resp_busqueda = st.selectbox("Seleccione el responsable", lista_resp)
     
     try:
         todos_los_datos = hoja_datos.get_all_values()
@@ -145,23 +152,25 @@ elif st.session_state.pantalla == 'buscador_eventos':
         
         for i in range(1, len(todos_los_datos)):
             fila = todos_los_datos[i]
-            # Solo leemos si tiene al menos el nombre (Columna E, índice 4)
             if len(fila) > 4:
                 if fila[1] == st.session_state.area_seleccionada and fila[3] == resp_busqueda:
-                    if len(fila) < 60 or fila[59] != "Finalizado":
-                        n_registro = fila[0]
-                        nombre_ev = fila[4]
-                        fecha_ev = fila[10] if len(fila) > 10 else "Sin Fecha"
-                        
-                        # Llave única con el número de registro para que no se oculten
-                        unique_key = f"{nombre_ev} (Fecha: {fecha_ev} - Registro N° {n_registro})"
-                        eventos_encontrados_dict[unique_key] = (i + 1, fila)
+                    # Lee el número de registro, nombre y fecha
+                    n_registro = fila[0]
+                    nombre_ev = fila[4]
+                    fecha_ev = fila[10] if len(fila) > 10 else "Sin Fecha"
+                    
+                    # Detecta si está en proceso o finalizado
+                    estado = "Finalizado" if len(fila) >= 60 and fila[59] == "Finalizado" else "En proceso"
+                    
+                    # Llave única que incluye el estado
+                    unique_key = f"{nombre_ev} (Fecha: {fecha_ev} - N° {n_registro} - {estado})"
+                    eventos_encontrados_dict[unique_key] = (i + 1, fila)
         
         opciones_eventos = list(eventos_encontrados_dict.keys())
-        opciones_eventos.reverse()
+        opciones_eventos.reverse() # Muestra los más nuevos primero
         
         if opciones_eventos:
-            evento_seleccionado = st.selectbox("Seleccione el Evento", opciones_eventos)
+            evento_seleccionado = st.selectbox("Seleccione el evento", opciones_eventos)
             
             col1, col2 = st.columns(2)
             with col2:
@@ -177,7 +186,7 @@ elif st.session_state.pantalla == 'buscador_eventos':
                     st.session_state.pantalla = 'opciones_evento'
                     st.rerun()
         else:
-            st.warning("Aún no ha creado eventos en proceso.")
+            st.warning("Aún no ha creado eventos.")
             if st.button("Regresar"):
                 st.session_state.pantalla = 'opciones_evento'
                 st.rerun()
@@ -187,6 +196,10 @@ elif st.session_state.pantalla == 'buscador_eventos':
         if st.button("Regresar"):
             st.session_state.pantalla = 'opciones_evento'
             st.rerun()
+
+    st.write("---")
+    if st.button("🏠 Volver al inicio"):
+        reset_app()
 
 # ==========================================
 # 4. FORMULARIOS (SECCIONES 2 A 6)
@@ -200,7 +213,6 @@ elif st.session_state.pantalla == 'seccion_2':
     d = st.session_state.fila_datos
     
     resp_index = lista_resp.index(d[3]) if d[3] in lista_resp else 0
-    # CORRECCIÓN DE MAYÚSCULAS Y MINÚSCULAS
     responsable = st.selectbox("Responsable de área", lista_resp, index=resp_index)
     
     nombre_evento = st.text_input("Nombre del evento", value=d[4])
@@ -225,7 +237,6 @@ elif st.session_state.pantalla == 'seccion_2':
         btn_guardar = st.button("Guardar y Continuar ➡️")
         
     if btn_guardar or btn_regresar:
-        # --- CANDADO DE SEGURIDAD SECCIÓN 2 ---
         if nombre_evento.strip() == "" or nombre_org.strip() == "" or celular_org.strip() == "" or lugar_evento.strip() == "":
             st.error("❌ Alto ahí: Debes llenar todos los campos de esta sección (Nombre, Organizador, Celular y Lugar) para poder crear el evento y continuar.")
         elif not celular_org.isdigit() or len(celular_org) != 10:
@@ -258,6 +269,9 @@ elif st.session_state.pantalla == 'seccion_2':
             if btn_guardar: navegar('seccion_3')
             if btn_regresar: navegar('opciones_evento')
             st.rerun()
+            
+    st.write("---")
+    if st.button("🏠 Volver al inicio"): reset_app()
 
 # --- SECCIÓN 3: EXTERNAS (MÚLTIPLES ENTIDADES) ---
 elif st.session_state.pantalla == 'seccion_3':
@@ -265,12 +279,10 @@ elif st.session_state.pantalla == 'seccion_3':
     d = st.session_state.fila_datos
     
     aplica = st.radio("¿Aplica?", ["No aplica", "Aplica"], index=1 if d[12] != "" else 0)
-    
     entidades_str = ""; solicitudes_str = ""; f_sol_str = ""; f_resp_str = ""
     
     if aplica == "Aplica":
         num_entidades = st.selectbox("¿Cuántas entidades externas?", list(range(1, 9)))
-        
         lista_nombres = []; lista_solicitudes = []; lista_f_sol = []; lista_f_resp = []
         
         for i in range(num_entidades):
@@ -309,6 +321,9 @@ elif st.session_state.pantalla == 'seccion_3':
         if btn_guardar: navegar('seccion_4')
         if btn_regresar: navegar('seccion_2')
         st.rerun()
+        
+    st.write("---")
+    if st.button("🏠 Volver al inicio"): reset_app()
 
 # --- SECCIÓN 4: INTERNAS ---
 elif st.session_state.pantalla == 'seccion_4':
@@ -360,6 +375,9 @@ elif st.session_state.pantalla == 'seccion_4':
         if btn_guardar: navegar('seccion_5')
         if btn_regresar: navegar('seccion_3')
         st.rerun()
+        
+    st.write("---")
+    if st.button("🏠 Volver al inicio"): reset_app()
 
 # --- SECCIÓN 5: LOGÍSTICA ---
 elif st.session_state.pantalla == 'seccion_5':
@@ -429,6 +447,9 @@ elif st.session_state.pantalla == 'seccion_5':
             if btn_guardar: navegar('seccion_6')
             if btn_regresar: navegar('seccion_4')
             st.rerun()
+            
+    st.write("---")
+    if st.button("🏠 Volver al inicio"): reset_app()
 
 # --- SECCIÓN 6: EVALUACIÓN Y FIN ---
 elif st.session_state.pantalla == 'seccion_6':
@@ -439,16 +460,20 @@ elif st.session_state.pantalla == 'seccion_6':
     obs = st.text_area("Observaciones", value=d[54])
     
     st.write("---")
-    col_btn1, col_btn2 = st.columns(2)
+    
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
     with col_btn1: btn_regresar = st.button("⬅️ Regresar y Guardar")
     with col_btn2: btn_terminar = st.button("TERMINADO ✔️")
+    with col_btn3: btn_eliminar = st.button("🗑️ Eliminar Evento")
     
+    # 1. ACCIÓN DE GUARDAR O TERMINAR
     if btn_terminar or btn_regresar:
         st.session_state.fila_datos[53] = nivel_ejec[0]
         st.session_state.fila_datos[54] = obs
         
         if btn_terminar:
             d = st.session_state.fila_datos
+            # Calcula días automáticamente (no da error si faltan fechas previas)
             d[55] = calcular_dias(d[6], d[10])
             d[56] = calcular_dias(d[20], d[21]) if d[18] == "Aplica" else ""
             d[57] = calcular_dias(d[27], d[28]) if d[25] == "Aplica" else ""
@@ -457,9 +482,31 @@ elif st.session_state.pantalla == 'seccion_6':
             
             guardar_en_excel()
             st.success("🎉 ¡Evento Finalizado y Guardado Exitosamente!")
-            st.session_state.pantalla = 'inicio'
+            reset_app()
         
         if btn_regresar:
             navegar('seccion_5')
-            
-        st.rerun()
+            st.rerun()
+
+    # 2. ACCIÓN DE ELIMINAR Y RENUMERAR
+    if btn_eliminar:
+        if st.session_state.fila_actual:
+            try:
+                # Borra la fila actual en el Drive
+                hoja_datos.delete_rows(st.session_state.fila_actual)
+                
+                # Cuenta cuántas filas quedaron en total (incluyendo el encabezado)
+                total_filas = len(hoja_datos.col_values(1))
+                
+                # Si quedaron eventos (es decir, total_filas > 1), los renumera
+                if total_filas > 1:
+                    nuevos_nums = [[str(i)] for i in range(1, total_filas)]
+                    hoja_datos.update(values=nuevos_nums, range_name=f"A2:A{total_filas}")
+                
+                st.warning("🗑️ Evento borrado permanentemente y numeración actualizada.")
+                reset_app()
+            except Exception as e:
+                st.error(f"Error al intentar borrar: {e}")
+                
+    st.write("---")
+    if st.button("🏠 Volver al inicio"): reset_app()
