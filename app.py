@@ -24,6 +24,14 @@ def agregar_fondo(imagen_archivo):
                 background-attachment: fixed;
             }}
             .stButton>button {{ width: 100%; }}
+            
+            /* EFECTO DE LEVITACIÓN PARA LAS IMÁGENES */
+            [data-testid="stImage"] img {{
+                transition: transform 0.3s ease-in-out;
+            }}
+            [data-testid="stImage"] img:hover {{
+                transform: translateY(-15px);
+            }}
             </style>
             """,
             unsafe_allow_html=True
@@ -166,7 +174,7 @@ elif st.session_state.pantalla == 'buscador_eventos':
             st.rerun()
 
 # ==========================================
-# 4. FORMULARIOS (SECCIONES 2 A 6) - SIN ST.FORM PARA QUE SEAN DINÁMICOS
+# 4. FORMULARIOS (SECCIONES 2 A 6)
 # ==========================================
 
 # --- SECCIÓN 2: INFORMACIÓN DEL EVENTO ---
@@ -201,8 +209,9 @@ elif st.session_state.pantalla == 'seccion_2':
         btn_guardar = st.button("Guardar y Continuar ➡️")
         
     if btn_guardar or btn_regresar:
-        if celular_org != "" and not celular_org.isdigit():
-            st.error("❌ El celular solo debe contener números.")
+        # Validación ESTRICTA de 10 dígitos
+        if celular_org != "" and (not celular_org.isdigit() or len(celular_org) != 10):
+            st.error("❌ El celular del organizador debe tener exactamente 10 dígitos numéricos.")
         elif nombre_evento == "":
             st.error("❌ El nombre del evento es obligatorio.")
         else:
@@ -234,20 +243,40 @@ elif st.session_state.pantalla == 'seccion_2':
             if btn_regresar: navegar('opciones_evento')
             st.rerun()
 
-# --- SECCIÓN 3: EXTERNAS ---
+# --- SECCIÓN 3: EXTERNAS (MÚLTIPLES ENTIDADES) ---
 elif st.session_state.pantalla == 'seccion_3':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Entidades Externas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
     aplica = st.radio("¿Aplica?", ["No aplica", "Aplica"], index=1 if d[12] != "" else 0)
-    entidad = ""; solicitud = ""; f_solicitud = date.today(); f_respuesta = date.today()
+    
+    entidades_str = ""; solicitudes_str = ""; f_sol_str = ""; f_resp_str = ""
     
     if aplica == "Aplica":
-        entidad = st.text_input("Entidad externa", value=d[12])
-        solicitud = st.text_area("Solicitud realizada", value=d[13])
-        c1, c2 = st.columns(2)
-        with c1: f_solicitud = st.date_input("Fecha de solicitud")
-        with c2: f_respuesta = st.date_input("Fecha de respuesta")
+        # Selector de número de entidades (Máximo 8)
+        num_entidades = st.selectbox("¿Cuántas entidades externas?", list(range(1, 9)))
+        
+        lista_nombres = []; lista_solicitudes = []; lista_f_sol = []; lista_f_resp = []
+        
+        for i in range(num_entidades):
+            st.markdown(f"**Entidad {i+1}**")
+            nom = st.text_input(f"Nombre de la entidad {i+1}", key=f"ent_{i}")
+            sol = st.text_area(f"Solicitud {i+1}", key=f"sol_{i}")
+            c1, c2 = st.columns(2)
+            with c1: fs = st.date_input(f"Fecha de solicitud {i+1}", key=f"fs_{i}")
+            with c2: fr = st.date_input(f"Fecha de respuesta {i+1}", key=f"fr_{i}")
+            
+            if nom != "": # Solo lo agrupa si escribieron el nombre
+                lista_nombres.append(f"{i+1}. {nom}")
+                lista_solicitudes.append(f"{i+1}. {sol}")
+                lista_f_sol.append(f"{i+1}. {fs.strftime('%d/%m/%Y')}")
+                lista_f_resp.append(f"{i+1}. {fr.strftime('%d/%m/%Y')}")
+                
+        # Une las listas con saltos de línea para que quede perfecto en la celda de Excel
+        entidades_str = "\n".join(lista_nombres)
+        solicitudes_str = "\n".join(lista_solicitudes)
+        f_sol_str = "\n".join(lista_f_sol)
+        f_resp_str = "\n".join(lista_f_resp)
         
     st.write("---")
     col_btn1, col_btn2 = st.columns(2)
@@ -256,10 +285,10 @@ elif st.session_state.pantalla == 'seccion_3':
     
     if btn_guardar or btn_regresar:
         if aplica == "Aplica":
-            st.session_state.fila_datos[12] = entidad
-            st.session_state.fila_datos[13] = solicitud
-            st.session_state.fila_datos[14] = f_solicitud.strftime("%d/%m/%Y")
-            st.session_state.fila_datos[15] = f_respuesta.strftime("%d/%m/%Y")
+            st.session_state.fila_datos[12] = entidades_str
+            st.session_state.fila_datos[13] = solicitudes_str
+            st.session_state.fila_datos[14] = f_sol_str
+            st.session_state.fila_datos[15] = f_resp_str
         else:
             st.session_state.fila_datos[12:16] = ["", "", "", ""]
             
@@ -272,7 +301,6 @@ elif st.session_state.pantalla == 'seccion_4':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Áreas Internas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    # 1. Culturas
     st.markdown("**1. Dirección Culturas, Patrimonio y Recreación**")
     ap_culturas = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="r_cult", index=1 if d[16]=="Aplica" else 0)
     rec_culturas = st.text_input("Recursos entregados", value=d[17]) if ap_culturas == "Aplica" else ""
@@ -331,6 +359,11 @@ elif st.session_state.pantalla == 'seccion_5':
     with c_conc: concentracion = st.text_input("Concentración", value=d[42])
     
     st.write("---")
+    
+    # Recolector de todos los celulares para validarlos al final
+    celulares_ingresados = []
+    if cel_asiste != "": celulares_ingresados.append(cel_asiste)
+    
     def dibujar_logistica(nombre, max_num):
         aplica = st.radio(f"¿Aplica {nombre}?", ["No aplica", "Aplica"], key=f"ap_{nombre}")
         if aplica == "Aplica":
@@ -340,15 +373,17 @@ elif st.session_state.pantalla == 'seccion_5':
                 c1, c2 = st.columns(2)
                 with c1: nom = st.text_input(f"Nombre {i+1}", key=f"nom_{nombre}_{i}")
                 with c2: cel = st.text_input(f"Celular {i+1}", max_chars=10, key=f"cel_{nombre}_{i}")
+                
+                if cel != "": celulares_ingresados.append(cel)
                 if nom or cel: contactos.append(f"{nom} ({cel})")
             return ["Aplica", str(num), "\n".join(contactos)]
         return ["No aplica", "", ""]
 
-    res_cam = dibujar_logistica("Camionetas", 10)
+    res_cam = dibujar_logistica("Camionetas", 15) # Máximo 15
     st.write("---")
-    res_bus = dibujar_logistica("Busetas", 10)
+    res_bus = dibujar_logistica("Busetas", 15) # Máximo 15
     st.write("---")
-    res_aux = dibujar_logistica("Auxiliares", 20)
+    res_aux = dibujar_logistica("Auxiliares", 50) # Máximo 50
     st.write("---")
     
     insumos = st.text_area("Detalle de los insumos solicitados", value=d[51])
@@ -359,8 +394,15 @@ elif st.session_state.pantalla == 'seccion_5':
     with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
     
     if btn_guardar or btn_regresar:
-        if cel_asiste != "" and not cel_asiste.isdigit():
-            st.error("❌ Los celulares deben contener solo números.")
+        # Validación de que TODOS los celulares tengan exactamente 10 dígitos numéricos
+        hay_error_celular = False
+        for c in celulares_ingresados:
+            if not c.isdigit() or len(c) != 10:
+                hay_error_celular = True
+                break
+                
+        if hay_error_celular:
+            st.error("❌ Todo número de celular ingresado en esta sección debe tener exactamente 10 dígitos numéricos.")
         else:
             st.session_state.fila_datos[39] = resp_asiste
             st.session_state.fila_datos[40] = cel_asiste
