@@ -86,7 +86,7 @@ if st.session_state.pantalla == 'inicio':
     col_logo1, col_logo2, col_logo3 = st.columns([1, 2, 1])
     with col_logo2:
         try:
-            st.image("logo_superioir.png", use_container_width=True)
+            st.image("logo_superior.png", use_container_width=True)
         except:
             st.write("*(Falta cargar logo_superioir.png)*")
             
