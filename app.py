@@ -116,26 +116,216 @@ if st.session_state.pantalla == 'inicio':
             st.session_state.area_seleccionada = "Recreación"
             st.session_state.pantalla = 'opciones_evento' # Nos manda a la pantalla 2
             st.rerun()
-
 # --- PANTALLA 2: NUEVO O EXISTENTE ---
 elif st.session_state.pantalla == 'opciones_evento':
-    # Título que recuerda el área elegida
     st.markdown(f"<h3 style='text-align: center; color: white;'>Área: {st.session_state.area_seleccionada}</h3>", unsafe_allow_html=True)
     st.write("")
     
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Nuevo Evento", use_container_width=True):
-            # Aquí irá la lógica para ir a la Sección 2
-            st.success("Yendo a crear un Nuevo Evento...") 
+            st.session_state.pantalla = 'info_evento' # Vamos a la primera parte
+            st.rerun()
             
     with col2:
         if st.button("Evento ya hecho", use_container_width=True):
-            # Aquí irá la lógica para buscar en el Excel
-            st.info("Yendo a buscar eventos existentes...")
+            st.info("Buscador de eventos en construcción...")
             
     st.write("---")
-    # Botón para regresar si se equivocaron de área
     if st.button("Volver al inicio"):
         st.session_state.pantalla = 'inicio'
         st.rerun()
+
+# =====================================================================
+# PANTALLA: INFORMACIÓN DEL EVENTO (Ex Sección 2)
+# =====================================================================
+elif st.session_state.pantalla == 'info_evento':
+    st.markdown("<h3 style='text-align: center; color: white;'>Información del Evento</h3>", unsafe_allow_html=True)
+    
+    if st.session_state.area_seleccionada == "Culturas y Patrimonio":
+        lista_responsables = ["Responsable 1", "Responsable 2", "Responsable 3", "Responsable 4", "Responsable 5"]
+    else:
+        lista_responsables = ["Responsable 6", "Responsable 7", "Responsable 8"]
+
+    with st.form("form_info_evento"):
+        responsable = st.selectbox("Responsable de Área", lista_responsables)
+        tipo_area = st.selectbox("Tipo de Área", ["Propio", "Apoyo"])
+        nombre_evento = st.text_input("Nombre del Evento")
+        lugar_evento = st.text_input("Lugar del Evento")
+        
+        col_fecha, col_hora = st.columns(2)
+        with col_fecha:
+            fecha_evento = st.date_input("Fecha del Evento")
+        with col_hora:
+            hora_evento = st.time_input("Hora del Evento")
+            
+        celular = st.text_input("Número de Celular del Responsable", max_chars=10)
+        submit_btn = st.form_submit_button("Guardar y Continuar")
+
+        if submit_btn:
+            if celular != "" and not celular.isdigit():
+                st.error("❌ El celular solo debe contener números.")
+            elif nombre_evento == "" or lugar_evento == "":
+                st.error("❌ Llena el nombre y lugar del evento.")
+            else:
+                meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                mes_texto = meses[fecha_evento.month - 1]
+                fecha_str = fecha_evento.strftime("%d/%m/%Y")
+                hora_str = hora_evento.strftime("%H:%M")
+                
+                try:
+                    fila_nueva = [mes_texto, st.session_state.area_seleccionada, responsable, tipo_area, nombre_evento, lugar_evento, fecha_str, hora_str, celular]
+                    hoja_datos.append_row(fila_nueva)
+                    
+                    # Guardamos en memoria en qué fila se guardó para actualizarla en las siguientes pantallas
+                    st.session_state.fila_actual = len(hoja_datos.get_all_values()) 
+                    
+                    st.success("✅ Evento creado.")
+                    st.session_state.pantalla = 'entidades_externas'
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al guardar: {e}")
+
+# =====================================================================
+# PANTALLA: ENTIDADES EXTERNAS (Ex Sección 3)
+# =====================================================================
+elif st.session_state.pantalla == 'entidades_externas':
+    st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Entidades Externas</h3>", unsafe_allow_html=True)
+    
+    with st.form("form_externas"):
+        aplica_externa = st.radio("¿Aplica coordinación con entidades externas?", ["No aplica", "Aplica"])
+        
+        entidad = ""
+        solicitud = ""
+        if aplica_externa == "Aplica":
+            entidad = st.text_input("Nombre de la Entidad Externa")
+            solicitud = st.text_area("Detalle de la Solicitud")
+            
+        submit_btn = st.form_submit_button("Guardar y Continuar")
+        
+        if submit_btn:
+            # Aquí mandaríamos a actualizar las columnas correspondientes en el Excel usando st.session_state.fila_actual
+            # Ejemplo: hoja_datos.update(f"J{st.session_state.fila_actual}:L{st.session_state.fila_actual}", [[aplica_externa, entidad, solicitud]])
+            st.session_state.pantalla = 'coordinacion_interna'
+            st.rerun()
+
+# =====================================================================
+# PANTALLA: COORDINACIÓN INTERNA (Ex Sección 4)
+# =====================================================================
+elif st.session_state.pantalla == 'coordinacion_interna':
+    st.markdown("<h3 style='text-align: center; color: white;'>Coordinación Interna</h3>", unsafe_allow_html=True)
+    
+    with st.form("form_interna"):
+        # 1. Dirección Propia (Culturas/Recreación)
+        st.markdown("**1. Dirección de Culturas, Patrimonio y Recreación**")
+        aplica_nuestra = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="dir_nuestra")
+        recursos_nuestros = ""
+        if aplica_nuestra == "Aplica":
+            recursos_nuestros = st.text_input("Recursos entregados")
+        
+        st.write("---")
+        # 2. Dirección de Comunicación
+        st.markdown("**2. Dirección de Comunicación**")
+        aplica_com = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="dir_com")
+        nivel_com = ""
+        if aplica_com == "Aplica":
+            cumplio_com = st.radio("¿Se entregó lo solicitado?", ["Sí", "No"], key="cump_com")
+            if cumplio_com == "Sí":
+                st.info("Nivel de cumplimiento: 5 (100%) automático")
+                nivel_com = "5"
+            else:
+                nivel_com = st.selectbox("Nivel de cumplimiento", ["1 (20%)", "2 (40%)", "3 (60%)", "4 (80%)"], key="niv_com")
+                nivel_com = nivel_com[0] # Extrae solo el número
+
+        # (Aquí puedes replicar el bloque de Comunicación para las Direcciones 3 y 4)
+        
+        submit_btn = st.form_submit_button("Guardar y Continuar")
+        if submit_btn:
+            # Lógica de actualización en Excel
+            st.session_state.pantalla = 'logistica'
+            st.rerun()
+
+# =====================================================================
+# PANTALLA: LOGÍSTICA Y TRANSPORTE (Ex Sección 5)
+# =====================================================================
+elif st.session_state.pantalla == 'logistica':
+    st.markdown("<h3 style='text-align: center; color: white;'>Logística y Transporte</h3>", unsafe_allow_html=True)
+    
+    with st.form("form_logistica"):
+        # Camionetas / Busetas
+        st.markdown("**Camionetas o Busetas**")
+        aplica_transporte = st.radio("¿Aplica transporte?", ["No aplica", "Aplica"], key="aplica_trans")
+        
+        cadena_choferes = ""
+        if aplica_transporte == "Aplica":
+            num_vehiculos = st.selectbox("Número de Camionetas/Busetas", [1, 2, 3, 4, 5, 6, 7, 8])
+            datos_choferes = []
+            
+            # Generador dinámico de campos
+            for i in range(num_vehiculos):
+                c1, c2 = st.columns(2)
+                with c1:
+                    nom = st.text_input(f"Nombre Chofer {i+1}", key=f"nom_c_{i}")
+                with c2:
+                    cel = st.text_input(f"Celular {i+1}", max_chars=10, key=f"cel_c_{i}")
+                
+                if nom != "" or cel != "":
+                    datos_choferes.append(f"{nom} ({cel})")
+            
+            # Une todos los contactos con un salto de línea para el Excel
+            cadena_choferes = "\n".join(datos_choferes) 
+
+        st.write("---")
+        
+        # Auxiliares
+        st.markdown("**Auxiliares**")
+        aplica_aux = st.radio("¿Aplica auxiliares?", ["No aplica", "Aplica"], key="aplica_aux")
+        
+        cadena_auxiliares = ""
+        if aplica_aux == "Aplica":
+            num_auxiliares = st.selectbox("Número de Auxiliares", [1, 2, 3, 4, 5, 6, 7, 8])
+            datos_aux = []
+            
+            for i in range(num_auxiliares):
+                c1, c2 = st.columns(2)
+                with c1:
+                    nom = st.text_input(f"Nombre Auxiliar {i+1}", key=f"nom_a_{i}")
+                with c2:
+                    cel = st.text_input(f"Celular {i+1}", max_chars=10, key=f"cel_a_{i}")
+                
+                if nom != "" or cel != "":
+                    datos_aux.append(f"{nom} ({cel})")
+            
+            cadena_auxiliares = "\n".join(datos_aux)
+
+        submit_btn = st.form_submit_button("Guardar y Continuar")
+        if submit_btn:
+             # Lógica de actualización en Excel
+            st.session_state.pantalla = 'evaluacion_final'
+            st.rerun()
+
+# =====================================================================
+# PANTALLA: EVALUACIÓN FINAL (Ex Sección 6)
+# =====================================================================
+elif st.session_state.pantalla == 'evaluacion_final':
+    st.markdown("<h3 style='text-align: center; color: white;'>Evaluación Final</h3>", unsafe_allow_html=True)
+    
+    with st.form("form_evaluacion"):
+        st.write("Califique el nivel de ejecución general del evento:")
+        nivel_ejecucion = st.radio("Nivel de Ejecución", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"])
+        
+        observaciones = st.text_area("Observaciones Finales (Opcional)")
+        
+        st.write("---")
+        submit_btn = st.form_submit_button("TERMINADO ✔️")
+        
+        if submit_btn:
+            numero_nivel = nivel_ejecucion[0]
+            
+            # --- Aquí mandamos el SÍ a la última columna de Excel ---
+            # Ejemplo: hoja_datos.update(f"Z{st.session_state.fila_actual}", [["SÍ"]])
+            
+            st.success("¡Flujo completado! El evento ha sido cerrado y registrado exitosamente.")
+            # Reiniciamos la app para el siguiente evento
+            st.session_state.pantalla = 'inicio'
+            st.rerun()
