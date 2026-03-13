@@ -95,11 +95,13 @@ def reset_app():
     st.rerun()
 
 # ==========================================
-# 3. GENERADORES DE PDF
+# 3. GENERADORES DE PDF (CORREGIDOS)
 # ==========================================
 def txt(texto):
-    if not texto: return ""
-    return str(texto).replace('“', '"').replace('”', '"').replace('\n', ' ').encode('latin-1', 'replace').decode('latin-1')
+    # ESCUDO ANTI-ERRORES: Si está vacío, devuelve un guion.
+    if not texto or str(texto).strip() == "": return "-"
+    # Respeta los saltos de línea (\n) para los recuadros grandes
+    return str(texto).replace('“', '"').replace('”', '"').encode('latin-1', 'replace').decode('latin-1')
 
 def generar_pdf_hoja_ruta(d):
     pdf = FPDF()
@@ -379,19 +381,17 @@ elif st.session_state.pantalla == 'seccion_2':
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 3 --- (BLINDADA)
+# --- SECCIÓN 3 --- 
 elif st.session_state.pantalla == 'seccion_3':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Entidades Externas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    # Validar si había algo antes de forma segura
     aplica_def = 1 if str(d[12]).strip() != "" else 0
     aplica = st.radio("¿Aplica coordinación externa?", ["No aplica", "Aplica"], index=aplica_def)
     
     ent_str = ""; sol_str = ""; fs_str = ""; fr_str = ""
     
     if aplica == "Aplica":
-        # Limpieza segura de los datos viejos
         e_ex = [x for x in str(d[12]).split('\n') if x.strip()]
         s_ex = [x for x in str(d[13]).split('\n') if x.strip()]
         fs_ex = [x for x in str(d[14]).split('\n') if x.strip()]
@@ -405,7 +405,6 @@ elif st.session_state.pantalla == 'seccion_3':
         
         for i in range(num_ent):
             with st.expander(f"🏢 Entidad Externa {i+1}", expanded=True):
-                # Recuperar de forma blindada
                 vn = e_ex[i] if i < len(e_ex) else ""
                 if ". " in vn: vn = vn.split('. ', 1)[1]
                 
@@ -548,18 +547,17 @@ elif st.session_state.pantalla == 'seccion_5':
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
 
-# --- SECCIÓN 6 --- (BLINDADA)
+# --- SECCIÓN 6 --- 
 elif st.session_state.pantalla == 'seccion_6':
     st.markdown("<h3 style='text-align: center; color: white;'>Cierre y Evaluación del Evento</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
     with st.container():
-        # Escudo protector para extraer el nivel de ejecución (evita el ValueError de tu foto)
         try:
             val_idx = int(str(d[53]).strip()[0]) - 1
             if val_idx < 0 or val_idx > 4: val_idx = 4
         except:
-            val_idx = 4 # Por defecto marca 5 (Perfecto)
+            val_idx = 4
             
         nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"], index=val_idx)
         obs = st.text_area("Observaciones Finales", value=d[54])
