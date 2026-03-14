@@ -111,6 +111,22 @@ def reset_app():
 def txt(texto):
     return str(texto) if texto and str(texto).strip() != "" else "-"
 
+def formato_porcentaje(val):
+    """Convierte números del 1 al 10 en porcentajes para el Word"""
+    try:
+        if not val or str(val).strip() == "-" or str(val).strip() == "": return "-"
+        num = int(str(val).strip())
+        return f"{num * 10}%"
+    except:
+        return str(val)
+
+def formato_nivel(val):
+    """Extrae solo el texto limpio de la evaluación (Ej: de '5 (Perfecto)' saca 'Perfecto')"""
+    val_str = str(val).strip()
+    if "(" in val_str and ")" in val_str:
+        return val_str.split("(")[1].replace(")", "").strip()
+    return val_str if val_str and val_str != "-" else "-"
+
 def fecha_elegante(fecha_str):
     if not fecha_str or fecha_str == "-": return "-"
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -150,7 +166,6 @@ def rellenar_vehiculos(context, prefijo, aplica, contactos_str, limite):
             context[f"{prefijo}_{i}_c"] = "@@BORRAR@@"
 
 def rellenar_entidades(context, n_str, s_str, fs_str, fr_str):
-    # Función interna para limpiar los "1. " de eventos viejos
     def clean_prefix(val):
         val = str(val).strip()
         if len(val) >= 3 and val[0].isdigit() and val[1:3] == ". ":
@@ -194,15 +209,15 @@ def generar_word_expediente(d):
         
         "aplica_comunicacion": True if d[18] == "Aplica" else False,
         "sol_com": txt(d[19]), "fs_com": fecha_elegante(txt(d[20])), "fr_com": fecha_elegante(txt(d[21])), 
-        "rec_com": txt(d[22]), "niv_com": txt(d[24]),
+        "rec_com": txt(d[22]), "niv_com": formato_porcentaje(d[24]), # SE APLICA EL PORCENTAJE AQUÍ
         
         "aplica_th": True if d[25] == "Aplica" else False,
         "sol_th": txt(d[26]), "fs_th": fecha_elegante(txt(d[27])), "fr_th": fecha_elegante(txt(d[28])), 
-        "rec_th": txt(d[29]), "niv_th": txt(d[31]),
+        "rec_th": txt(d[29]), "niv_th": formato_porcentaje(d[31]), # SE APLICA EL PORCENTAJE AQUÍ
         
         "aplica_admin": True if d[32] == "Aplica" else False,
         "sol_adm": txt(d[33]), "fs_adm": fecha_elegante(txt(d[34])), "fr_adm": fecha_elegante(txt(d[35])), 
-        "rec_adm": txt(d[36]), "niv_adm": txt(d[38]),
+        "rec_adm": txt(d[36]), "niv_adm": formato_porcentaje(d[38]), # SE APLICA EL PORCENTAJE AQUÍ
         
         "responsable": f"{d[39]} ({d[40]})",
         "ubicacion_detalle": txt(d[53]),
@@ -212,7 +227,9 @@ def generar_word_expediente(d):
         "aplica_bus": True if d[46] == "Aplica" else False,
         "aplica_aux": True if d[49] == "Aplica" else False,
         
-        "descripcion": txt(d[52]), "nivel_texto": txt(d[54]), "observaciones": txt(d[55]),
+        "descripcion": txt(d[52]), 
+        "nivel_texto": formato_nivel(d[54]), # SE APLICA EL RECORTE DE TEXTO AQUÍ
+        "observaciones": txt(d[55]),
         "dias_ejecucion": txt(d[56]), "dias_com": txt(d[57]),
         "dias_th": txt(d[58]), "dias_admin": txt(d[59])
     }
@@ -472,7 +489,6 @@ elif st.session_state.pantalla == 'seccion_3':
     ent_str = ""; sol_str = ""; fs_str = ""; fr_str = ""
     
     if aplica == "Aplica":
-        # Función para limpiar el prefijo "1. " de la base de datos vieja en la interfaz
         def clean_val(val):
             val = str(val).strip()
             if len(val) >= 3 and val[0].isdigit() and val[1:3] == ". ":
@@ -509,7 +525,6 @@ elif st.session_state.pantalla == 'seccion_3':
                 with c1: fs = st.date_input("Fecha solicitud", value=vfs, key=f"fs_{i}")
                 with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{i}")
                 
-                # YA NO GUARDAMOS EL NÚMERO
                 if nom.strip(): 
                     l_nom.append(nom)
                     l_sol.append(sol)
