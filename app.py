@@ -78,13 +78,14 @@ def actualizar_calculos_automaticos():
     d[59] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else "-"
 
 def parse_time(time_str):
-    if not time_str or time_str == "-": return datetime.now().time()
-    for fmt in ("%H:%M %p", "%I:%M %p", "%H:%M"):
+    # SOLUCIÓN: Si está vacío, retorna 'None' para que la casilla se vea completamente en blanco
+    if not time_str or str(time_str).strip() == "-": return None
+    for fmt in ("%H:%M %p", "%I:%M %p", "%H:%M", "%H:%M:%S"):
         try:
-            return datetime.strptime(time_str.strip(), fmt).time()
+            return datetime.strptime(str(time_str).strip(), fmt).time()
         except ValueError:
             pass
-    return datetime.now().time()
+    return None
 
 def guardar_en_excel():
     if st.session_state.fila_actual:
@@ -112,7 +113,6 @@ def txt(texto):
     return str(texto) if texto and str(texto).strip() != "" else "-"
 
 def formato_porcentaje(val):
-    """Convierte números del 1 al 10 en porcentajes para el Word"""
     try:
         if not val or str(val).strip() == "-" or str(val).strip() == "": return "-"
         num = int(str(val).strip())
@@ -121,7 +121,6 @@ def formato_porcentaje(val):
         return str(val)
 
 def formato_nivel(val):
-    """Extrae solo el texto limpio de la evaluación (Ej: de '5 (Perfecto)' saca 'Perfecto')"""
     val_str = str(val).strip()
     if "(" in val_str and ")" in val_str:
         return val_str.split("(")[1].replace(")", "").strip()
@@ -209,15 +208,15 @@ def generar_word_expediente(d):
         
         "aplica_comunicacion": True if d[18] == "Aplica" else False,
         "sol_com": txt(d[19]), "fs_com": fecha_elegante(txt(d[20])), "fr_com": fecha_elegante(txt(d[21])), 
-        "rec_com": txt(d[22]), "niv_com": formato_porcentaje(d[24]), # SE APLICA EL PORCENTAJE AQUÍ
+        "rec_com": txt(d[22]), "niv_com": formato_porcentaje(d[24]),
         
         "aplica_th": True if d[25] == "Aplica" else False,
         "sol_th": txt(d[26]), "fs_th": fecha_elegante(txt(d[27])), "fr_th": fecha_elegante(txt(d[28])), 
-        "rec_th": txt(d[29]), "niv_th": formato_porcentaje(d[31]), # SE APLICA EL PORCENTAJE AQUÍ
+        "rec_th": txt(d[29]), "niv_th": formato_porcentaje(d[31]),
         
         "aplica_admin": True if d[32] == "Aplica" else False,
         "sol_adm": txt(d[33]), "fs_adm": fecha_elegante(txt(d[34])), "fr_adm": fecha_elegante(txt(d[35])), 
-        "rec_adm": txt(d[36]), "niv_adm": formato_porcentaje(d[38]), # SE APLICA EL PORCENTAJE AQUÍ
+        "rec_adm": txt(d[36]), "niv_adm": formato_porcentaje(d[38]),
         
         "responsable": f"{d[39]} ({d[40]})",
         "ubicacion_detalle": txt(d[53]),
@@ -228,7 +227,7 @@ def generar_word_expediente(d):
         "aplica_aux": True if d[49] == "Aplica" else False,
         
         "descripcion": txt(d[52]), 
-        "nivel_texto": formato_nivel(d[54]), # SE APLICA EL RECORTE DE TEXTO AQUÍ
+        "nivel_texto": formato_nivel(d[54]),
         "observaciones": txt(d[55]),
         "dias_ejecucion": txt(d[56]), "dias_com": txt(d[57]),
         "dias_th": txt(d[58]), "dias_admin": txt(d[59])
@@ -260,19 +259,22 @@ def generar_word_hoja_ruta(d):
         "lugar_concentracion": txt(d[42]), "hora_concentracion": txt(d[41]),
         "responsable": f"{d[39]} ({d[40]})", "organizador": f"{d[7]} ({d[8]})",
         
-        "aplica_cam": True if d[43] == "Aplica" else False,
-        "aplica_bus": True if d[46] == "Aplica" else False,
-        "aplica_aux": True if d[49] == "Aplica" else False,
+        "aplica_cam": "Aplica" if d[43] == "Aplica" else "No aplica",
+        "num_cam": txt(d[44]) if d[43] == "Aplica" else "-",
+        "cont_cam": txt(d[45]) if d[43] == "Aplica" else "-",
+        
+        "aplica_bus": "Aplica" if d[46] == "Aplica" else "No aplica",
+        "num_bus": txt(d[47]) if d[46] == "Aplica" else "-",
+        "cont_bus": txt(d[48]) if d[46] == "Aplica" else "-",
+        
+        "aplica_aux": "Aplica" if d[49] == "Aplica" else "No aplica",
+        "num_aux": txt(d[50]) if d[49] == "Aplica" else "-",
+        "cont_aux": txt(d[51]) if d[49] == "Aplica" else "-",
         
         "recursos_totales": recursos_str, "ubicacion_detalle": txt(d[53]), "descripcion": txt(d[52])
     }
     
-    rellenar_vehiculos(context, "cam", d[43], d[45], 15)
-    rellenar_vehiculos(context, "bus", d[46], d[48], 15)
-    rellenar_vehiculos(context, "aux", d[49], d[51], 50)
-    
     doc.render(context)
-    limpiar_filas_sobrantes(doc)
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -418,16 +420,20 @@ elif st.session_state.pantalla == 'seccion_2':
         
         con_fin_def = False
         try:
-            if "-" in d[11]:
-                def_h_ev = parse_time(d[11].split("-")[0])
-                def_h_fin = parse_time(d[11].split("-")[1])
-                con_fin_def = True
+            val_hora = str(d[11]).strip()
+            if "-" in val_hora and val_hora != "-":
+                partes = val_hora.split("-")
+                def_h_ev = parse_time(partes[0])
+                def_h_fin = parse_time(partes[1]) if len(partes) > 1 else None
+                con_fin_def = True if def_h_fin else False
             else:
-                def_h_ev = parse_time(d[11])
-                def_h_fin = datetime.now().time()
+                def_h_ev = parse_time(val_hora)
+                def_h_fin = None
+                con_fin_def = False
         except:
-            def_h_ev = datetime.now().time()
-            def_h_fin = datetime.now().time()
+            def_h_ev = None
+            def_h_fin = None
+            con_fin_def = False
 
         c3, c4 = st.columns(2)
         with c3:
@@ -459,8 +465,13 @@ elif st.session_state.pantalla == 'seccion_2':
             st.error("❌ El celular debe tener 10 dígitos numéricos.")
         else:
             meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-            hora_str = hora_inicio.strftime("%H:%M %p")
-            if con_fin: hora_str += f" - {hora_fin.strftime('%H:%M %p')}"
+            
+            hi_str = hora_inicio.strftime("%I:%M %p") if hora_inicio else "-"
+            if con_fin and 'hora_fin' in locals() and hora_fin:
+                hf_str = hora_fin.strftime("%I:%M %p")
+                hora_str = f"{hi_str} - {hf_str}"
+            else:
+                hora_str = hi_str
             
             st.session_state.fila_datos[1:12] = [st.session_state.area_seleccionada, meses[fecha_evento.month-1], responsable, nombre_evento, tipo_evento, inicio_org.strftime("%d/%m/%Y"), nombre_org, celular_org, lugar_evento, fecha_evento.strftime("%d/%m/%Y"), hora_str]
             
@@ -659,12 +670,14 @@ elif st.session_state.pantalla == 'seccion_5':
     if col1.button("⬅️ Regresar y Guardar"):
         if any(not c.isdigit() or len(c)!=10 for c in celulares): st.error("❌ Los celulares deben tener 10 números.")
         else:
-            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M %p"), concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
+            hs_str = hora_salida.strftime("%I:%M %p") if hora_salida else "-"
+            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hs_str, concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
             navegar('seccion_4'); st.rerun()
     if col2.button("Guardar y Continuar ➡️"):
         if any(not c.isdigit() or len(c)!=10 for c in celulares): st.error("❌ Los celulares deben tener 10 números.")
         else:
-            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M %p"), concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
+            hs_str = hora_salida.strftime("%I:%M %p") if hora_salida else "-"
+            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hs_str, concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
             navegar('seccion_6'); st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
@@ -714,11 +727,15 @@ elif st.session_state.pantalla == 'seccion_6':
             if st.button("✔️ Sí, eliminar permanentemente"):
                 if st.session_state.fila_actual:
                     try:
+                        # SOLUCIÓN DE BORRADO: Elimina específicamente la fila sin confundir al sistema.
                         hoja_datos.delete_rows(st.session_state.fila_actual)
-                        tot = len(hoja_datos.col_values(1))
-                        if tot > 1: hoja_datos.update(values=[[str(i)] for i in range(1, tot)], range_name=f"A2:A{tot}")
-                        st.success("🗑️ Evento borrado."); reset_app()
-                    except: st.error("Error al borrar.")
+                        st.success("🗑️ Evento borrado.")
+                        st.session_state.pantalla = 'inicio'
+                        st.session_state.area_seleccionada = None
+                        st.session_state.fila_actual = None
+                        st.rerun()
+                    except Exception as e: 
+                        st.error(f"Error al borrar: {e}")
         with cx2:
             if st.button("❌ Cancelar"): st.session_state.confirmar_eliminar = False; st.rerun()
 
