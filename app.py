@@ -150,14 +150,20 @@ def rellenar_vehiculos(context, prefijo, aplica, contactos_str, limite):
             context[f"{prefijo}_{i}_c"] = "@@BORRAR@@"
 
 def rellenar_entidades(context, n_str, s_str, fs_str, fr_str):
-    # Ya no dependemos de "Aplica", leemos directamente si hay nombres
+    # Función interna para limpiar los "1. " de eventos viejos
+    def clean_prefix(val):
+        val = str(val).strip()
+        if len(val) >= 3 and val[0].isdigit() and val[1:3] == ". ":
+            return val[3:]
+        return val
+
     if not n_str or str(n_str).strip() == "-":
         nombres, sols, fss, frs = [], [], [], []
     else:
-        nombres = [x for x in str(n_str).split('\n') if x.strip() and x.strip() != "-"]
-        sols = [x for x in str(s_str).split('\n') if x.strip() and x.strip() != "-"]
-        fss = [x for x in str(fs_str).split('\n') if x.strip() and x.strip() != "-"]
-        frs = [x for x in str(fr_str).split('\n') if x.strip() and x.strip() != "-"]
+        nombres = [clean_prefix(x) for x in str(n_str).split('\n') if x.strip() and x.strip() != "-"]
+        sols = [clean_prefix(x) for x in str(s_str).split('\n') if x.strip() and x.strip() != "-"]
+        fss = [clean_prefix(x) for x in str(fs_str).split('\n') if x.strip() and x.strip() != "-"]
+        frs = [clean_prefix(x) for x in str(fr_str).split('\n') if x.strip() and x.strip() != "-"]
         
     for i in range(1, 9):
         if i <= len(nombres):
@@ -328,7 +334,6 @@ elif st.session_state.pantalla == 'buscador_eventos':
                     st.session_state.fila_actual = fila_real
                     st.session_state.fila_datos = (datos_fila + [""] * 65)[:65]
                     
-                    # SI YA ESTÁ FINALIZADO, MANDA A LA PANTALLA DE SOLO DESCARGAS
                     if st.session_state.fila_datos[60] == "Finalizado":
                         st.session_state.pantalla = 'descargas'
                     else:
@@ -437,8 +442,6 @@ elif st.session_state.pantalla == 'seccion_2':
             st.error("❌ El celular debe tener 10 dígitos numéricos.")
         else:
             meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-            
-            # GUARDAR HORAS EN FORMATO 24H + AM/PM
             hora_str = hora_inicio.strftime("%H:%M %p")
             if con_fin: hora_str += f" - {hora_fin.strftime('%H:%M %p')}"
             
@@ -469,6 +472,13 @@ elif st.session_state.pantalla == 'seccion_3':
     ent_str = ""; sol_str = ""; fs_str = ""; fr_str = ""
     
     if aplica == "Aplica":
+        # Función para limpiar el prefijo "1. " de la base de datos vieja en la interfaz
+        def clean_val(val):
+            val = str(val).strip()
+            if len(val) >= 3 and val[0].isdigit() and val[1:3] == ". ":
+                return val[3:]
+            return val
+
         e_ex = [x for x in str(d[12]).split('\n') if x.strip() and x.strip() != "-"]
         s_ex = [x for x in str(d[13]).split('\n') if x.strip() and x.strip() != "-"]
         fs_ex = [x for x in str(d[14]).split('\n') if x.strip() and x.strip() != "-"]
@@ -482,19 +492,14 @@ elif st.session_state.pantalla == 'seccion_3':
         
         for i in range(num_ent):
             with st.expander(f"🏢 Entidad Externa {i+1}", expanded=True):
-                vn = e_ex[i] if i < len(e_ex) else ""
-                if ". " in vn: vn = vn.split('. ', 1)[1]
+                vn = clean_val(e_ex[i] if i < len(e_ex) else "")
+                vs = clean_val(s_ex[i] if i < len(s_ex) else "")
+                vfs_str = clean_val(fs_ex[i] if i < len(fs_ex) else "")
+                vfr_str = clean_val(fr_ex[i] if i < len(fr_ex) else "")
                 
-                vs = s_ex[i] if i < len(s_ex) else ""
-                if ". " in vs: vs = vs.split('. ', 1)[1]
-                
-                vfs_str = fs_ex[i] if i < len(fs_ex) else ""
-                if ". " in vfs_str: vfs_str = vfs_str.split('. ', 1)[1]
                 try: vfs = datetime.strptime(vfs_str, "%d/%m/%Y").date()
                 except: vfs = date.today()
                 
-                vfr_str = fr_ex[i] if i < len(fr_ex) else ""
-                if ". " in vfr_str: vfr_str = vfr_str.split('. ', 1)[1]
                 try: vfr = datetime.strptime(vfr_str, "%d/%m/%Y").date()
                 except: vfr = date.today()
 
@@ -504,9 +509,12 @@ elif st.session_state.pantalla == 'seccion_3':
                 with c1: fs = st.date_input("Fecha solicitud", value=vfs, key=f"fs_{i}")
                 with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{i}")
                 
+                # YA NO GUARDAMOS EL NÚMERO
                 if nom.strip(): 
-                    l_nom.append(f"{i+1}. {nom}"); l_sol.append(f"{i+1}. {sol}")
-                    l_fs.append(f"{i+1}. {fs.strftime('%d/%m/%Y')}"); l_fr.append(f"{i+1}. {fr.strftime('%d/%m/%Y')}")
+                    l_nom.append(nom)
+                    l_sol.append(sol)
+                    l_fs.append(fs.strftime('%d/%m/%Y'))
+                    l_fr.append(fr.strftime('%d/%m/%Y'))
                     
         ent_str="\n".join(l_nom); sol_str="\n".join(l_sol); fs_str="\n".join(l_fs); fr_str="\n".join(l_fr)
         
