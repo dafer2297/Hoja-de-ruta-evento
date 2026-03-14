@@ -100,6 +100,16 @@ def reset_app():
 def txt(texto):
     return str(texto) if texto and str(texto).strip() != "" else "-"
 
+def fecha_elegante(fecha_str):
+    if not fecha_str or fecha_str == "-": return "-"
+    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    try:
+        f = datetime.strptime(fecha_str.strip(), "%d/%m/%Y")
+        return f"{dias[f.weekday()]}, {f.day} de {meses[f.month-1]} de {f.year}"
+    except:
+        return fecha_str # Si falla, devuelve la original
+
 def armar_lista_vehiculos(aplica, contactos_str):
     if aplica != "Aplica": return []
     lineas = [x for x in contactos_str.split('\n') if x.strip()]
@@ -109,9 +119,12 @@ def generar_word_expediente(d):
     doc = DocxTemplate("Expediente del evento plantilla.docx")
     
     context = {
-        "evento": txt(d[4]), "estado": txt(d[60]), "inicio_plan": txt(d[6]),
+        "evento": txt(d[4]), "estado": txt(d[60]), 
+        "inicio_plan": fecha_elegante(txt(d[6])),
         "area": txt(d[1]), "responsable_area": txt(d[3]), "tipo": txt(d[5]),
-        "lugar": txt(d[9]), "dia": txt(d[10]), "hora": txt(d[11]),
+        "lugar": txt(d[9]), 
+        "dia": fecha_elegante(txt(d[10])), 
+        "hora": txt(d[11]),
         "organizador": f"{d[7]} ({d[8]})",
         
         "aplica_externas": True if txt(d[12]) != "-" else False,
@@ -124,15 +137,15 @@ def generar_word_expediente(d):
         "rec_culturas": txt(d[17]),
         
         "aplica_comunicacion": True if d[18] == "Aplica" else False,
-        "sol_com": txt(d[19]), "fs_com": txt(d[20]), "fr_com": txt(d[21]), 
+        "sol_com": txt(d[19]), "fs_com": fecha_elegante(txt(d[20])), "fr_com": fecha_elegante(txt(d[21])), 
         "rec_com": txt(d[22]), "niv_com": txt(d[24]),
         
         "aplica_th": True if d[25] == "Aplica" else False,
-        "sol_th": txt(d[26]), "fs_th": txt(d[27]), "fr_th": txt(d[28]), 
+        "sol_th": txt(d[26]), "fs_th": fecha_elegante(txt(d[27])), "fr_th": fecha_elegante(txt(d[28])), 
         "rec_th": txt(d[29]), "niv_th": txt(d[31]),
         
         "aplica_admin": True if d[32] == "Aplica" else False,
-        "sol_adm": txt(d[33]), "fs_adm": txt(d[34]), "fr_adm": txt(d[35]), 
+        "sol_adm": txt(d[33]), "fs_adm": fecha_elegante(txt(d[34])), "fr_adm": fecha_elegante(txt(d[35])), 
         "rec_adm": txt(d[36]), "niv_adm": txt(d[38]),
         
         "responsable": f"{d[39]} ({d[40]})",
@@ -172,7 +185,9 @@ def generar_word_hoja_ruta(d):
     recursos_str = "\n\n".join(recursos) if recursos else "-"
 
     context = {
-        "evento": txt(d[4]), "lugar": txt(d[9]), "dia": txt(d[10]), "hora": txt(d[11]),
+        "evento": txt(d[4]), "lugar": txt(d[9]), 
+        "dia": fecha_elegante(txt(d[10])), 
+        "hora": txt(d[11]),
         "lugar_concentracion": txt(d[42]), "hora_concentracion": txt(d[41]),
         "responsable": f"{d[39]} ({d[40]})", "organizador": f"{d[7]} ({d[8]})",
         
@@ -278,7 +293,7 @@ elif st.session_state.pantalla == 'buscador_eventos':
         else:
             st.warning("Aún no ha creado eventos.")
             if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
-    except Exception as e: # ¡ESTO ARREGLA EL ERROR DEL DOBLE CLIC!
+    except Exception as e:
         st.error("Error al buscar. Vuelve a intentarlo.")
         if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
     st.write("---")
@@ -327,9 +342,9 @@ elif st.session_state.pantalla == 'seccion_2':
             fecha_evento = st.date_input("Fecha del evento", value=def_f_ev)
             inicio_org = st.date_input("Fecha de inicio de planificación", value=def_i_org)
         with c4:
-            hora_inicio = st.time_input("Hora de inicio del evento", value=def_h_ev) # CAMBIADO
+            hora_inicio = st.time_input("Hora de inicio del evento", value=def_h_ev)
             con_fin = st.checkbox("¿Añadir hora de cierre?", value=con_fin_def)
-            if con_fin: hora_fin = st.time_input("Hora de cierre del evento", value=def_h_fin) # CAMBIADO
+            if con_fin: hora_fin = st.time_input("Hora de cierre del evento", value=def_h_fin)
     
     st.write("---")
     with st.container():
@@ -461,10 +476,9 @@ elif st.session_state.pantalla == 'seccion_4':
             
             cp = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if d[idx_base+5]=="No" else 0)
             
-            # CÁLCULO DE NIVEL DE CUMPLIMIENTO (1-9 o 10)
             try: idx_nv = int(d[idx_base+6]) - 1 if str(d[idx_base+6]).isdigit() else 0
             except: idx_nv = 0
-            if idx_nv > 8: idx_nv = 8 # Protección por si guardó "10" antes
+            if idx_nv > 8: idx_nv = 8 
             
             opciones_nv = ["1 (10%)", "2 (20%)", "3 (30%)", "4 (40%)", "5 (50%)", "6 (60%)", "7 (70%)", "8 (80%)", "9 (90%)"]
             nv_val = st.selectbox("Nivel de cumplimiento", opciones_nv, key=f"n_{idx_base}", index=idx_nv)
@@ -502,7 +516,7 @@ elif st.session_state.pantalla == 'seccion_5':
         with c3:
             try: hs_def = datetime.strptime(d[41], "%H:%M").time() if d[41] and d[41]!="-" else datetime.now().time()
             except: hs_def = datetime.now().time()
-            hora_salida = st.time_input("Hora de concentración", value=hs_def) # CAMBIADO
+            hora_salida = st.time_input("Hora de concentración", value=hs_def)
         with c4: concentracion = st.text_input("Lugar de concentración", value=d[42] if d[42]!="-" else "")
     
     celulares = [cel_asiste] if cel_asiste else []
@@ -529,8 +543,8 @@ elif st.session_state.pantalla == 'seccion_5':
     
     with st.container():
         st.markdown("#### 📋 Detalles Operativos")
-        insumos = st.text_area("Descripción y requerimientos del evento", value=d[52] if d[52]!="-" else "", height=150) # CAMBIADO
-        ubicacion = st.text_area("Ubicación exacta / Link de Maps", value=d[53] if d[53]!="-" else "", height=100) # CAMBIADO
+        insumos = st.text_area("Descripción y requerimientos del evento", value=d[52] if d[52]!="-" else "", height=150)
+        ubicacion = st.text_area("Ubicación exacta / Link de Maps", value=d[53] if d[53]!="-" else "", height=100)
 
     st.write("---")
     col1, col2 = st.columns(2)
@@ -553,16 +567,17 @@ elif st.session_state.pantalla == 'seccion_6':
     d = st.session_state.fila_datos
     
     with st.container():
+        # ESCUDO REFORZADO CONTRA EL VALUE ERROR
         try:
-            val_idx = int(str(d[54]).strip()[0]) - 1
-            if val_idx < 0 or val_idx > 4: val_idx = 4
+            val_str = str(d[54]).strip()
+            val_idx = int(val_str[0]) - 1 if val_str and val_str[0].isdigit() else 4
+            if val_idx not in [0, 1, 2, 3, 4]: val_idx = 4
         except:
             val_idx = 4
             
         nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"], index=val_idx)
         obs = st.text_area("Observaciones Finales", value=d[55] if d[55]!="-" else "")
     
-    # RECUERDA: Ahora descargamos .DOCX (Word)
     st.markdown("#### 📥 Descargar Documentos en Word")
     col_pdf1, col_pdf2 = st.columns(2)
     
