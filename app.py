@@ -95,7 +95,7 @@ def reset_app():
     st.rerun()
 
 # ==========================================
-# 3. GENERADORES DE PLANTILLAS WORD (DOCXTPL)
+# 3. GENERADORES DE PLANTILLAS WORD 
 # ==========================================
 def txt(texto):
     return str(texto) if texto and str(texto).strip() != "" else "-"
@@ -108,23 +108,29 @@ def fecha_elegante(fecha_str):
         f = datetime.strptime(fecha_str.strip(), "%d/%m/%Y")
         return f"{dias[f.weekday()]}, {f.day} de {meses[f.month-1]} de {f.year}"
     except:
-        return fecha_str # Si falla, devuelve la original
+        return fecha_str 
 
-def armar_lista_vehiculos(aplica, contactos_str):
-    if aplica != "Aplica": return []
-    lineas = [x for x in contactos_str.split('\n') if x.strip()]
-    return [{"num": str(i+1), "contacto": lineas[i]} for i in range(len(lineas))]
+def armar_columnas(aplica, contactos_str):
+    """Convierte la lista de contactos en columnas para Word de forma automática"""
+    if aplica != "Aplica" or not contactos_str or contactos_str == "-": 
+        return "", ""
+    lineas = [x.strip() for x in str(contactos_str).split('\n') if x.strip() and x.strip() != "-"]
+    col_num = "\n".join([str(i+1) for i in range(len(lineas))])
+    col_cont = "\n".join(lineas)
+    return col_num, col_cont
 
 def generar_word_expediente(d):
     doc = DocxTemplate("Expediente del evento plantilla.docx")
+    
+    num_cam, cont_cam = armar_columnas(d[43], d[45])
+    num_bus, cont_bus = armar_columnas(d[46], d[48])
+    num_aux, cont_aux = armar_columnas(d[49], d[51])
     
     context = {
         "evento": txt(d[4]), "estado": txt(d[60]), 
         "inicio_plan": fecha_elegante(txt(d[6])),
         "area": txt(d[1]), "responsable_area": txt(d[3]), "tipo": txt(d[5]),
-        "lugar": txt(d[9]), 
-        "dia": fecha_elegante(txt(d[10])), 
-        "hora": txt(d[11]),
+        "lugar": txt(d[9]), "dia": fecha_elegante(txt(d[10])), "hora": txt(d[11]),
         "organizador": f"{d[7]} ({d[8]})",
         
         "aplica_externas": True if txt(d[12]) != "-" else False,
@@ -153,18 +159,15 @@ def generar_word_expediente(d):
         "hora_concentracion": txt(d[41]), "lugar_concentracion": txt(d[42]),
         
         "aplica_cam": True if d[43] == "Aplica" else False,
-        "camionetas": armar_lista_vehiculos(d[43], d[45]),
+        "num_cam": num_cam, "cont_cam": cont_cam,
         
         "aplica_bus": True if d[46] == "Aplica" else False,
-        "busetas": armar_lista_vehiculos(d[46], d[48]),
+        "num_bus": num_bus, "cont_bus": cont_bus,
         
         "aplica_aux": True if d[49] == "Aplica" else False,
-        "auxiliares": armar_lista_vehiculos(d[49], d[51]),
+        "num_aux": num_aux, "cont_aux": cont_aux,
         
-        "descripcion": txt(d[52]),
-        "nivel_texto": txt(d[54]),
-        "observaciones": txt(d[55]),
-        
+        "descripcion": txt(d[52]), "nivel_texto": txt(d[54]), "observaciones": txt(d[55]),
         "dias_ejecucion": txt(d[56]), "dias_com": txt(d[57]),
         "dias_th": txt(d[58]), "dias_admin": txt(d[59])
     }
@@ -186,8 +189,7 @@ def generar_word_hoja_ruta(d):
 
     context = {
         "evento": txt(d[4]), "lugar": txt(d[9]), 
-        "dia": fecha_elegante(txt(d[10])), 
-        "hora": txt(d[11]),
+        "dia": fecha_elegante(txt(d[10])), "hora": txt(d[11]),
         "lugar_concentracion": txt(d[42]), "hora_concentracion": txt(d[41]),
         "responsable": f"{d[39]} ({d[40]})", "organizador": f"{d[7]} ({d[8]})",
         
@@ -203,9 +205,7 @@ def generar_word_hoja_ruta(d):
         "num_aux": txt(d[50]) if d[49]=="Aplica" else "-",
         "cont_aux": txt(d[51]).replace('\n', ' | ') if d[49]=="Aplica" else "-",
         
-        "recursos_totales": recursos_str,
-        "ubicacion_detalle": txt(d[53]),
-        "descripcion": txt(d[52])
+        "recursos_totales": recursos_str, "ubicacion_detalle": txt(d[53]), "descripcion": txt(d[52])
     }
     
     doc.render(context)
@@ -567,7 +567,6 @@ elif st.session_state.pantalla == 'seccion_6':
     d = st.session_state.fila_datos
     
     with st.container():
-        # ESCUDO REFORZADO CONTRA EL VALUE ERROR
         try:
             val_str = str(d[54]).strip()
             val_idx = int(val_str[0]) - 1 if val_str and val_str[0].isdigit() else 4
@@ -589,7 +588,7 @@ elif st.session_state.pantalla == 'seccion_6':
             word_exp = generar_word_expediente(d)
             st.download_button(label="📑 Descargar Expediente", data=word_exp, file_name=f"Expediente_{d[4]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     except Exception as e:
-        st.error(f"Sube las dos plantillas de Word a GitHub para habilitar las descargas. Detalles: {e}")
+        st.error(f"Error al generar. Verifica que quitaste los códigos {%tr%} de tu Word. Detalles: {e}")
 
     st.write("---")
     c1, c2, c3 = st.columns(3)
