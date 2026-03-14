@@ -95,7 +95,7 @@ def reset_app():
     st.rerun()
 
 # ==========================================
-# 3. GENERADORES DE PLANTILLAS WORD 
+# 3. GENERADORES DE PLANTILLAS WORD (FUERZA BRUTA)
 # ==========================================
 def txt(texto):
     return str(texto) if texto and str(texto).strip() != "" else "-"
@@ -110,15 +110,61 @@ def fecha_elegante(fecha_str):
     except:
         return fecha_str 
 
-def armar_lista_vehiculos(aplica, contactos_str):
-    """Crea la lista dinámica que duplicará las filas en Word automáticamente"""
-    if aplica != "Aplica": return []
-    lineas = [x for x in str(contactos_str).split('\n') if x.strip() and x.strip() != "-"]
-    return [{"num": str(i+1), "contacto": lineas[i]} for i in range(len(lineas))]
+def limpiar_filas_sobrantes(doc):
+    """ LA ESCOBA MÁGICA: Elimina de Word cualquier fila que diga @@BORRAR@@ """
+    rows_to_delete = []
+    for table in doc.docx.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                if "@@BORRAR@@" in cell.text:
+                    rows_to_delete.append(row)
+                    break
+    for row in rows_to_delete:
+        try:
+            row._element.getparent().remove(row._element)
+        except:
+            pass
+
+def rellenar_vehiculos(context, prefijo, aplica, contactos_str, limite):
+    if aplica != "Aplica":
+        lista = []
+    else:
+        lineas = [x.strip() for x in str(contactos_str).split('\n') if x.strip() and x.strip() != "-"]
+        lista = [{"num": str(i+1), "contacto": lineas[i]} for i in range(len(lineas))]
+        
+    for i in range(1, limite + 1):
+        if i <= len(lista):
+            context[f"{prefijo}_{i}_n"] = lista[i-1]["num"]
+            context[f"{prefijo}_{i}_c"] = lista[i-1]["contacto"]
+        else:
+            context[f"{prefijo}_{i}_n"] = "@@BORRAR@@"
+            context[f"{prefijo}_{i}_c"] = "@@BORRAR@@"
+
+def rellenar_entidades(context, aplica, n_str, s_str, fs_str, fr_str):
+    if aplica != "Aplica" or not n_str or str(n_str).strip() == "-":
+        nombres, sols, fss, frs = [], [], [], []
+    else:
+        nombres = [x for x in str(n_str).split('\n') if x.strip() and x.strip() != "-"]
+        sols = [x for x in str(s_str).split('\n') if x.strip() and x.strip() != "-"]
+        fss = [x for x in str(fs_str).split('\n') if x.strip() and x.strip() != "-"]
+        frs = [x for x in str(fr_str).split('\n') if x.strip() and x.strip() != "-"]
+        
+    for i in range(1, 9):
+        if i <= len(nombres):
+            context[f"mostrar_ent_{i}"] = True
+            context[f"ent_{i}_n"] = nombres[i-1]
+            context[f"ent_{i}_s"] = sols[i-1] if i-1 < len(sols) else "-"
+            context[f"ent_{i}_fs"] = fss[i-1] if i-1 < len(fss) else "-"
+            context[f"ent_{i}_fr"] = frs[i-1] if i-1 < len(frs) else "-"
+        else:
+            context[f"mostrar_ent_{i}"] = False
+            context[f"ent_{i}_n"] = ""
+            context[f"ent_{i}_s"] = ""
+            context[f"ent_{i}_fs"] = ""
+            context[f"ent_{i}_fr"] = ""
 
 def generar_word_expediente(d):
     doc = DocxTemplate("Expediente del evento plantilla.docx")
-    
     context = {
         "evento": txt(d[4]), "estado": txt(d[60]), 
         "inicio_plan": fecha_elegante(txt(d[6])),
@@ -126,12 +172,7 @@ def generar_word_expediente(d):
         "lugar": txt(d[9]), "dia": fecha_elegante(txt(d[10])), "hora": txt(d[11]),
         "organizador": f"{d[7]} ({d[8]})",
         
-        "aplica_externas": True if txt(d[12]) != "-" else False,
-        "ent_nombre": txt(d[12]).replace('\n', ' | '),
-        "ent_solicitud": txt(d[13]).replace('\n', ' | '),
-        "ent_f_sol": txt(d[14]).replace('\n', ' | '),
-        "ent_f_resp": txt(d[15]).replace('\n', ' | '),
-        
+        "aplica_externas": True if txt(d[12]) != "-" and txt(d[12]) != "" else False,
         "aplica_culturas": True if d[16] == "Aplica" else False,
         "rec_culturas": txt(d[17]),
         
@@ -152,20 +193,21 @@ def generar_word_expediente(d):
         "hora_concentracion": txt(d[41]), "lugar_concentracion": txt(d[42]),
         
         "aplica_cam": True if d[43] == "Aplica" else False,
-        "camionetas": armar_lista_vehiculos(d[43], d[45]),
-        
         "aplica_bus": True if d[46] == "Aplica" else False,
-        "busetas": armar_lista_vehiculos(d[46], d[48]),
-        
         "aplica_aux": True if d[49] == "Aplica" else False,
-        "auxiliares": armar_lista_vehiculos(d[49], d[51]),
         
         "descripcion": txt(d[52]), "nivel_texto": txt(d[54]), "observaciones": txt(d[55]),
         "dias_ejecucion": txt(d[56]), "dias_com": txt(d[57]),
         "dias_th": txt(d[58]), "dias_admin": txt(d[59])
     }
     
+    rellenar_entidades(context, d[12] if txt(d[12])!="-" else "No", d[12], d[13], d[14], d[15])
+    rellenar_vehiculos(context, "cam", d[43], d[45], 15)
+    rellenar_vehiculos(context, "bus", d[46], d[48], 15)
+    rellenar_vehiculos(context, "aux", d[49], d[51], 50)
+    
     doc.render(context)
+    limpiar_filas_sobrantes(doc)  # Llama a la escoba mágica
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -187,18 +229,18 @@ def generar_word_hoja_ruta(d):
         "responsable": f"{d[39]} ({d[40]})", "organizador": f"{d[7]} ({d[8]})",
         
         "aplica_cam": True if d[43] == "Aplica" else False,
-        "camionetas": armar_lista_vehiculos(d[43], d[45]),
-        
         "aplica_bus": True if d[46] == "Aplica" else False,
-        "busetas": armar_lista_vehiculos(d[46], d[48]),
-        
         "aplica_aux": True if d[49] == "Aplica" else False,
-        "auxiliares": armar_lista_vehiculos(d[49], d[51]),
         
         "recursos_totales": recursos_str, "ubicacion_detalle": txt(d[53]), "descripcion": txt(d[52])
     }
     
+    rellenar_vehiculos(context, "cam", d[43], d[45], 15)
+    rellenar_vehiculos(context, "bus", d[46], d[48], 15)
+    rellenar_vehiculos(context, "aux", d[49], d[51], 50)
+    
     doc.render(context)
+    limpiar_filas_sobrantes(doc) # Llama a la escoba mágica
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -511,17 +553,34 @@ elif st.session_state.pantalla == 'seccion_5':
     
     celulares = [cel_asiste] if cel_asiste else []
     
+    # LA FUNCIÓN CORREGIDA PARA QUE RECUERDE A LOS CHOFERES
     def dib_log(n, mx, idx):
         with st.expander(f"🚐 Requerimiento de {n}", expanded=(d[idx]=="Aplica")):
             ap = st.radio(f"¿Aplica {n}?", ["No aplica", "Aplica"], key=f"ap_{idx}", index=1 if d[idx]=="Aplica" else 0)
             if ap == "Aplica":
                 v_n = int(d[idx+1]) if str(d[idx+1]).isdigit() else 1
                 num = st.selectbox(f"N° de {n}", list(range(1, mx+1)), key=f"n_{idx}", index=v_n-1)
+                
+                # Rescatar la memoria del Excel
+                existing_lines = [x.strip() for x in str(d[idx+2]).split('\n') if x.strip() and x.strip() != "-"]
+                
                 cont = []
                 for i in range(num):
+                    # Separar el nombre y celular que ya estaban guardados
+                    val_nom = ""
+                    val_cel = ""
+                    if i < len(existing_lines):
+                        line = existing_lines[i]
+                        if "(" in line and ")" in line:
+                            val_nom = line.rsplit("(", 1)[0].strip()
+                            val_cel = line.rsplit("(", 1)[1].replace(")", "").strip()
+                        else:
+                            val_nom = line
+                            
                     cx1, cx2 = st.columns(2)
-                    with cx1: nom = st.text_input(f"Chofer/Personal {i+1}", key=f"nm_{idx}_{i}")
-                    with cx2: cel = st.text_input(f"Celular {i+1}", max_chars=10, key=f"cl_{idx}_{i}")
+                    with cx1: nom = st.text_input(f"Chofer/Personal {i+1}", value=val_nom, key=f"nm_{idx}_{i}")
+                    with cx2: cel = st.text_input(f"Celular {i+1}", value=val_cel, max_chars=10, key=f"cl_{idx}_{i}")
+                    
                     if cel: celulares.append(cel)
                     if nom or cel: cont.append(f"{nom} ({cel})")
                 return ["Aplica", str(num), "\n".join(cont)]
