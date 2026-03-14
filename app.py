@@ -59,6 +59,7 @@ if 'area_seleccionada' not in st.session_state: st.session_state.area_selecciona
 if 'fila_actual' not in st.session_state: st.session_state.fila_actual = None
 if 'modo' not in st.session_state: st.session_state.modo = "nuevo"
 if 'confirmar_eliminar' not in st.session_state: st.session_state.confirmar_eliminar = False
+if 'confirmar_terminar' not in st.session_state: st.session_state.confirmar_terminar = False
 if 'fila_datos' not in st.session_state: st.session_state.fila_datos = [""] * 65
 
 def calcular_dias(fecha_inicio, fecha_fin):
@@ -76,6 +77,15 @@ def actualizar_calculos_automaticos():
     d[58] = calcular_dias(d[27], d[28]) if d[25] == "Aplica" else "-"
     d[59] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else "-"
 
+def parse_time(time_str):
+    if not time_str or time_str == "-": return datetime.now().time()
+    for fmt in ("%H:%M %p", "%I:%M %p", "%H:%M"):
+        try:
+            return datetime.strptime(time_str.strip(), fmt).time()
+        except ValueError:
+            pass
+    return datetime.now().time()
+
 def guardar_en_excel():
     if st.session_state.fila_actual:
         actualizar_calculos_automaticos()
@@ -92,10 +102,11 @@ def reset_app():
     st.session_state.fila_actual = None
     st.session_state.fila_datos = [""] * 65
     st.session_state.confirmar_eliminar = False
+    st.session_state.confirmar_terminar = False
     st.rerun()
 
 # ==========================================
-# 3. GENERADORES DE PLANTILLAS WORD (FUERZA BRUTA)
+# 3. GENERADORES DE PLANTILLAS WORD
 # ==========================================
 def txt(texto):
     return str(texto) if texto and str(texto).strip() != "" else "-"
@@ -111,7 +122,6 @@ def fecha_elegante(fecha_str):
         return fecha_str 
 
 def limpiar_filas_sobrantes(doc):
-    """ LA ESCOBA MÁGICA: Elimina de Word cualquier fila que diga @@BORRAR@@ """
     rows_to_delete = []
     for table in doc.docx.tables:
         for row in table.rows:
@@ -122,8 +132,7 @@ def limpiar_filas_sobrantes(doc):
     for row in rows_to_delete:
         try:
             row._element.getparent().remove(row._element)
-        except:
-            pass
+        except: pass
 
 def rellenar_vehiculos(context, prefijo, aplica, contactos_str, limite):
     if aplica != "Aplica":
@@ -140,8 +149,9 @@ def rellenar_vehiculos(context, prefijo, aplica, contactos_str, limite):
             context[f"{prefijo}_{i}_n"] = "@@BORRAR@@"
             context[f"{prefijo}_{i}_c"] = "@@BORRAR@@"
 
-def rellenar_entidades(context, aplica, n_str, s_str, fs_str, fr_str):
-    if aplica != "Aplica" or not n_str or str(n_str).strip() == "-":
+def rellenar_entidades(context, n_str, s_str, fs_str, fr_str):
+    # Ya no dependemos de "Aplica", leemos directamente si hay nombres
+    if not n_str or str(n_str).strip() == "-":
         nombres, sols, fss, frs = [], [], [], []
     else:
         nombres = [x for x in str(n_str).split('\n') if x.strip() and x.strip() != "-"]
@@ -201,13 +211,13 @@ def generar_word_expediente(d):
         "dias_th": txt(d[58]), "dias_admin": txt(d[59])
     }
     
-    rellenar_entidades(context, d[12] if txt(d[12])!="-" else "No", d[12], d[13], d[14], d[15])
+    rellenar_entidades(context, d[12], d[13], d[14], d[15])
     rellenar_vehiculos(context, "cam", d[43], d[45], 15)
     rellenar_vehiculos(context, "bus", d[46], d[48], 15)
     rellenar_vehiculos(context, "aux", d[49], d[51], 50)
     
     doc.render(context)
-    limpiar_filas_sobrantes(doc)  # Llama a la escoba mágica
+    limpiar_filas_sobrantes(doc)
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -215,7 +225,6 @@ def generar_word_expediente(d):
 
 def generar_word_hoja_ruta(d):
     doc = DocxTemplate("HOJA DE RUTA EVENTO plantilla.docx")
-    
     recursos = []
     if d[16] == "Aplica" and d[17]: recursos.append(f"CULTURAS:\n{d[17]}")
     if d[18] == "Aplica" and d[22]: recursos.append(f"COMUNICACIÓN:\n{d[22]}")
@@ -240,7 +249,7 @@ def generar_word_hoja_ruta(d):
     rellenar_vehiculos(context, "aux", d[49], d[51], 50)
     
     doc.render(context)
-    limpiar_filas_sobrantes(doc) # Llama a la escoba mágica
+    limpiar_filas_sobrantes(doc)
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -318,7 +327,12 @@ elif st.session_state.pantalla == 'buscador_eventos':
                     fila_real, datos_fila = eventos_encontrados_dict[evento_seleccionado]
                     st.session_state.fila_actual = fila_real
                     st.session_state.fila_datos = (datos_fila + [""] * 65)[:65]
-                    st.session_state.pantalla = 'seccion_2'
+                    
+                    # SI YA ESTÁ FINALIZADO, MANDA A LA PANTALLA DE SOLO DESCARGAS
+                    if st.session_state.fila_datos[60] == "Finalizado":
+                        st.session_state.pantalla = 'descargas'
+                    else:
+                        st.session_state.pantalla = 'seccion_2'
                     st.rerun()
             with col1:
                 if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
@@ -330,6 +344,30 @@ elif st.session_state.pantalla == 'buscador_eventos':
         if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
+
+# ==========================================
+# PANTALLA EXCLUSIVA DE DESCARGAS (SOLO LECTURA)
+# ==========================================
+elif st.session_state.pantalla == 'descargas':
+    st.markdown("<h3 style='text-align: center; color: white;'>✅ Evento Finalizado</h3>", unsafe_allow_html=True)
+    st.info("Este evento ya ha sido marcado como FINALIZADO. No es posible editar su información, pero puedes descargar los documentos generados.")
+    
+    d = st.session_state.fila_datos
+    col_pdf1, col_pdf2 = st.columns(2)
+    
+    try:
+        with col_pdf1:
+            word_ruta = generar_word_hoja_ruta(d)
+            st.download_button(label="📝 Descargar Hoja de Ruta", data=word_ruta, file_name=f"Hoja_Ruta_{d[4]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        with col_pdf2:
+            word_exp = generar_word_expediente(d)
+            st.download_button(label="📑 Descargar Expediente", data=word_exp, file_name=f"Expediente_{d[4]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    except Exception as e:
+        st.error(f"Error al generar el documento. Verifica las etiquetas en Word. Detalles: {e}")
+
+    st.write("---")
+    if st.button("🏠 Volver al inicio"): reset_app()
+
 
 # ==========================================
 # 5. FORMULARIOS (SECCIONES 2 A 6) 
@@ -359,11 +397,11 @@ elif st.session_state.pantalla == 'seccion_2':
         con_fin_def = False
         try:
             if "-" in d[11]:
-                def_h_ev = datetime.strptime(d[11].split("-")[0].strip(), "%I:%M %p").time()
-                def_h_fin = datetime.strptime(d[11].split("-")[1].strip(), "%I:%M %p").time()
+                def_h_ev = parse_time(d[11].split("-")[0])
+                def_h_fin = parse_time(d[11].split("-")[1])
                 con_fin_def = True
             else:
-                def_h_ev = datetime.strptime(d[11], "%I:%M %p").time()
+                def_h_ev = parse_time(d[11])
                 def_h_fin = datetime.now().time()
         except:
             def_h_ev = datetime.now().time()
@@ -399,8 +437,10 @@ elif st.session_state.pantalla == 'seccion_2':
             st.error("❌ El celular debe tener 10 dígitos numéricos.")
         else:
             meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-            hora_str = hora_inicio.strftime("%I:%M %p")
-            if con_fin: hora_str += f" - {hora_fin.strftime('%I:%M %p')}"
+            
+            # GUARDAR HORAS EN FORMATO 24H + AM/PM
+            hora_str = hora_inicio.strftime("%H:%M %p")
+            if con_fin: hora_str += f" - {hora_fin.strftime('%H:%M %p')}"
             
             st.session_state.fila_datos[1:12] = [st.session_state.area_seleccionada, meses[fecha_evento.month-1], responsable, nombre_evento, tipo_evento, inicio_org.strftime("%d/%m/%Y"), nombre_org, celular_org, lugar_evento, fecha_evento.strftime("%d/%m/%Y"), hora_str]
             
@@ -546,14 +586,12 @@ elif st.session_state.pantalla == 'seccion_5':
         with c2: cel_asiste = st.text_input("Celular", max_chars=10, value=d[40] if d[40]!="-" else "")
         c3, c4 = st.columns(2)
         with c3:
-            try: hs_def = datetime.strptime(d[41], "%H:%M").time() if d[41] and d[41]!="-" else datetime.now().time()
-            except: hs_def = datetime.now().time()
+            hs_def = parse_time(d[41])
             hora_salida = st.time_input("Hora de concentración", value=hs_def)
         with c4: concentracion = st.text_input("Lugar de concentración", value=d[42] if d[42]!="-" else "")
     
     celulares = [cel_asiste] if cel_asiste else []
     
-    # LA FUNCIÓN CORREGIDA PARA QUE RECUERDE A LOS CHOFERES
     def dib_log(n, mx, idx):
         with st.expander(f"🚐 Requerimiento de {n}", expanded=(d[idx]=="Aplica")):
             ap = st.radio(f"¿Aplica {n}?", ["No aplica", "Aplica"], key=f"ap_{idx}", index=1 if d[idx]=="Aplica" else 0)
@@ -561,12 +599,10 @@ elif st.session_state.pantalla == 'seccion_5':
                 v_n = int(d[idx+1]) if str(d[idx+1]).isdigit() else 1
                 num = st.selectbox(f"N° de {n}", list(range(1, mx+1)), key=f"n_{idx}", index=v_n-1)
                 
-                # Rescatar la memoria del Excel
                 existing_lines = [x.strip() for x in str(d[idx+2]).split('\n') if x.strip() and x.strip() != "-"]
                 
                 cont = []
                 for i in range(num):
-                    # Separar el nombre y celular que ya estaban guardados
                     val_nom = ""
                     val_cel = ""
                     if i < len(existing_lines):
@@ -600,12 +636,12 @@ elif st.session_state.pantalla == 'seccion_5':
     if col1.button("⬅️ Regresar y Guardar"):
         if any(not c.isdigit() or len(c)!=10 for c in celulares): st.error("❌ Los celulares deben tener 10 números.")
         else:
-            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M"), concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
+            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M %p"), concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
             navegar('seccion_4'); st.rerun()
     if col2.button("Guardar y Continuar ➡️"):
         if any(not c.isdigit() or len(c)!=10 for c in celulares): st.error("❌ Los celulares deben tener 10 números.")
         else:
-            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M"), concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
+            st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hora_salida.strftime("%H:%M %p"), concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
             navegar('seccion_6'); st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
@@ -626,7 +662,7 @@ elif st.session_state.pantalla == 'seccion_6':
         nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"], index=val_idx)
         obs = st.text_area("Observaciones Finales", value=d[55] if d[55]!="-" else "")
     
-    st.markdown("#### 📥 Descargar Documentos en Word")
+    st.markdown("#### 📥 Previsualizar Documentos (Borrador)")
     col_pdf1, col_pdf2 = st.columns(2)
     
     try:
@@ -637,7 +673,7 @@ elif st.session_state.pantalla == 'seccion_6':
             word_exp = generar_word_expediente(d)
             st.download_button(label="📑 Descargar Expediente", data=word_exp, file_name=f"Expediente_{d[4]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     except Exception as e:
-        st.error(f"Error al generar el documento. Verifica las etiquetas en Word. Detalles: {e}")
+        st.error(f"Error al generar el documento. Detalles: {e}")
 
     st.write("---")
     c1, c2, c3 = st.columns(3)
@@ -646,6 +682,7 @@ elif st.session_state.pantalla == 'seccion_6':
     with c3: btn_eliminar = st.button("🗑️ Eliminar Evento")
     
     if btn_eliminar: st.session_state.confirmar_eliminar = True
+    if btn_terminar: st.session_state.confirmar_terminar = True
         
     if st.session_state.confirmar_eliminar:
         st.warning("⚠️ ¿Estás completamente seguro de que deseas eliminar este evento?")
@@ -662,13 +699,28 @@ elif st.session_state.pantalla == 'seccion_6':
         with cx2:
             if st.button("❌ Cancelar"): st.session_state.confirmar_eliminar = False; st.rerun()
 
-    if not st.session_state.confirmar_eliminar and (btn_terminar or btn_regresar):
+    if st.session_state.confirmar_terminar:
+        st.warning("⚠️ ¿Estás seguro de que deseas marcar este evento como FINALIZADO? Ya no podrás editar su información.")
+        cx1, cx2 = st.columns(2)
+        with cx1:
+            if st.button("✔️ Sí, finalizar evento"):
+                st.session_state.fila_datos[54] = nivel_ejec
+                st.session_state.fila_datos[55] = obs
+                st.session_state.fila_datos[60] = "Finalizado"
+                guardar_en_excel()
+                st.session_state.confirmar_terminar = False
+                st.session_state.pantalla = 'descargas'
+                st.rerun()
+        with cx2:
+            if st.button("❌ No, mantener en proceso"): 
+                st.session_state.confirmar_terminar = False
+                st.rerun()
+
+    if not st.session_state.confirmar_eliminar and not st.session_state.confirmar_terminar and btn_regresar:
         st.session_state.fila_datos[54] = nivel_ejec
         st.session_state.fila_datos[55] = obs
-        if btn_terminar:
-            st.session_state.fila_datos[60] = "Finalizado"
-            guardar_en_excel(); st.success("🎉 ¡Evento Finalizado!"); reset_app()
-        if btn_regresar: navegar('seccion_5'); st.rerun()
+        navegar('seccion_5')
+        st.rerun()
 
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
