@@ -2,9 +2,10 @@ import streamlit as st
 import base64
 import json
 import gspread
+import io
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
-from fpdf import FPDF
+from docxtpl import DocxTemplate
 
 # ==========================================
 # 1. CONFIGURACIÓN Y CONEXIÓN
@@ -25,7 +26,6 @@ def agregar_fondo(imagen_archivo):
                 background-attachment: fixed;
             }}
             .stButton>button {{ width: 100%; margin-top: -10px; }}
-            /* Diseño para contenedores premium */
             div[data-testid="stExpander"] {{ background-color: rgba(255,255,255,0.05); border-radius: 10px; }}
             </style>
             """,
@@ -59,27 +59,27 @@ if 'area_seleccionada' not in st.session_state: st.session_state.area_selecciona
 if 'fila_actual' not in st.session_state: st.session_state.fila_actual = None
 if 'modo' not in st.session_state: st.session_state.modo = "nuevo"
 if 'confirmar_eliminar' not in st.session_state: st.session_state.confirmar_eliminar = False
-if 'fila_datos' not in st.session_state: st.session_state.fila_datos = [""] * 60
+if 'fila_datos' not in st.session_state: st.session_state.fila_datos = [""] * 65
 
 def calcular_dias(fecha_inicio, fecha_fin):
-    if not fecha_inicio or not fecha_fin or fecha_inicio == "" or fecha_fin == "": return ""
+    if not fecha_inicio or not fecha_fin or fecha_inicio == "-" or fecha_fin == "-": return "-"
     try:
         d1 = datetime.strptime(fecha_inicio, "%d/%m/%Y").date()
         d2 = datetime.strptime(fecha_fin, "%d/%m/%Y").date()
         return str((d2 - d1).days)
-    except: return ""
+    except: return "-"
 
 def actualizar_calculos_automaticos():
     d = st.session_state.fila_datos
-    d[55] = calcular_dias(d[6], d[10])
-    d[56] = calcular_dias(d[20], d[21]) if d[18] == "Aplica" else ""
-    d[57] = calcular_dias(d[27], d[28]) if d[25] == "Aplica" else ""
-    d[58] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else ""
+    d[56] = calcular_dias(d[6], d[10])
+    d[57] = calcular_dias(d[20], d[21]) if d[18] == "Aplica" else "-"
+    d[58] = calcular_dias(d[27], d[28]) if d[25] == "Aplica" else "-"
+    d[59] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else "-"
 
 def guardar_en_excel():
     if st.session_state.fila_actual:
         actualizar_calculos_automaticos()
-        rango = f"A{st.session_state.fila_actual}:BH{st.session_state.fila_actual}"
+        rango = f"A{st.session_state.fila_actual}:BM{st.session_state.fila_actual}"
         hoja_datos.update(values=[st.session_state.fila_datos], range_name=rango)
 
 def navegar(destino):
@@ -90,126 +90,114 @@ def reset_app():
     st.session_state.pantalla = 'inicio'
     st.session_state.area_seleccionada = None
     st.session_state.fila_actual = None
-    st.session_state.fila_datos = [""] * 60
+    st.session_state.fila_datos = [""] * 65
     st.session_state.confirmar_eliminar = False
     st.rerun()
 
 # ==========================================
-# 3. GENERADORES DE PDF (BLINDADOS CON MEDIDAS EXACTAS)
+# 3. GENERADORES DE PLANTILLAS WORD (DOCXTPL)
 # ==========================================
 def txt(texto):
-    if not texto or str(texto).strip() == "": return "-"
-    return str(texto).replace('“', '"').replace('”', '"').encode('latin-1', 'replace').decode('latin-1')
+    return str(texto) if texto and str(texto).strip() != "" else "-"
 
-def generar_pdf_hoja_ruta(d):
-    pdf = FPDF()
-    pdf.add_page()
-    try: pdf.image("logo_superior.png", 10, 8, 40)
-    except: pass
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 20, "", ln=True) 
-    pdf.cell(0, 10, txt(d[4].upper()), ln=True, align='C')
-    pdf.ln(5)
+def armar_lista_vehiculos(aplica, contactos_str):
+    if aplica != "Aplica": return []
+    lineas = [x for x in contactos_str.split('\n') if x.strip()]
+    return [{"num": str(i+1), "contacto": lineas[i]} for i in range(len(lineas))]
+
+def generar_word_expediente(d):
+    doc = DocxTemplate("Expediente del evento plantilla.docx")
     
-    # MEDIDAS FIJAS: 40mm para etiqueta, 150mm para texto (190mm total, entra perfecto en A4)
-    def fila_pdf(label, valor):
-        pdf.set_font("Arial", 'B', 11)
-        pdf.cell(40, 7, txt(label), 0, 0)
-        pdf.set_font("Arial", '', 11)
-        pdf.multi_cell(150, 7, txt(valor))
+    context = {
+        "evento": txt(d[4]), "estado": txt(d[60]), "inicio_plan": txt(d[6]),
+        "area": txt(d[1]), "responsable_area": txt(d[3]), "tipo": txt(d[5]),
+        "lugar": txt(d[9]), "dia": txt(d[10]), "hora": txt(d[11]),
+        "organizador": f"{d[7]} ({d[8]})",
         
-    fila_pdf("Lugar:", d[9])
-    fila_pdf("Día:", d[10])
-    fila_pdf("Hora:", d[11])
-    fila_pdf("Concentración:", d[42])
-    fila_pdf("Responsable:", f"{d[39]} - Cel: {d[40]}")
-    
-    if d[43] == "Aplica": fila_pdf("Camionetas:", d[45].replace("\n", ", "))
-    if d[46] == "Aplica": fila_pdf("Busetas:", d[48].replace("\n", ", "))
-    if d[49] == "Aplica": fila_pdf("Auxiliares:", d[51].replace("\n", ", "))
-    
-    pdf.ln(3)
-    pdf.set_font("Arial", 'B', 11)
-    pdf.cell(0, 7, txt("Descripción y Requerimientos:"), ln=True)
-    pdf.set_font("Arial", '', 11)
-    pdf.multi_cell(190, 6, txt(d[52])) # 190mm es el ancho total de escritura
-    pdf.ln(3)
-    
-    if (d[16] == "Aplica" and d[17]) or (d[18] == "Aplica" and d[22]) or (d[32] == "Aplica" and d[36]):
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 8, txt("RECURSOS INSTITUCIONALES ASIGNADOS"), ln=True, border='B')
-        pdf.ln(2)
-        if d[16] == "Aplica" and d[17]:
-            pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Culturas y Recreación:"), ln=True)
-            pdf.set_font("Arial", '', 10); pdf.multi_cell(190, 5, txt(d[17])); pdf.ln(1)
-        if d[18] == "Aplica" and d[22]:
-            pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Comunicación:"), ln=True)
-            pdf.set_font("Arial", '', 10); pdf.multi_cell(190, 5, txt(d[22])); pdf.ln(1)
-        if d[32] == "Aplica" and d[36]:
-            pdf.set_font("Arial", 'B', 10); pdf.cell(0, 6, txt("Recursos Administración:"), ln=True)
-            pdf.set_font("Arial", '', 10); pdf.multi_cell(190, 5, txt(d[36])); pdf.ln(1)
-
-    pdf.ln(8)
-    pdf.set_font("Arial", 'B', 11)
-    pdf.cell(0, 8, txt(f"ORGANIZADOR DEL EVENTO: {d[7]} ({d[8]})"), ln=True, align='C')
-    
-    salida = pdf.output(dest='S')
-    return salida.encode('latin-1') if isinstance(salida, str) else bytes(salida)
-
-def generar_pdf_expediente(d):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 15)
-    pdf.cell(0, 10, txt("EXPEDIENTE COMPLETO DEL EVENTO"), ln=True, align='C')
-    pdf.ln(5)
-    
-    def tit(texto):
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 8, txt(texto), ln=True, border='B')
-        pdf.ln(2)
+        "aplica_externas": True if txt(d[12]) != "-" else False,
+        "ent_nombre": txt(d[12]).replace('\n', ' | '),
+        "ent_solicitud": txt(d[13]).replace('\n', ' | '),
+        "ent_f_sol": txt(d[14]).replace('\n', ' | '),
+        "ent_f_resp": txt(d[15]).replace('\n', ' | '),
         
-    # MEDIDAS FIJAS: 55mm para etiqueta, 135mm para texto
-    def lin(label, valor):
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(55, 6, txt(label), 0, 0)
-        pdf.set_font("Arial", '', 10)
-        pdf.multi_cell(135, 6, txt(valor))
+        "aplica_culturas": True if d[16] == "Aplica" else False,
+        "rec_culturas": txt(d[17]),
+        
+        "aplica_comunicacion": True if d[18] == "Aplica" else False,
+        "sol_com": txt(d[19]), "fs_com": txt(d[20]), "fr_com": txt(d[21]), 
+        "rec_com": txt(d[22]), "niv_com": txt(d[24]),
+        
+        "aplica_th": True if d[25] == "Aplica" else False,
+        "sol_th": txt(d[26]), "fs_th": txt(d[27]), "fr_th": txt(d[28]), 
+        "rec_th": txt(d[29]), "niv_th": txt(d[31]),
+        
+        "aplica_admin": True if d[32] == "Aplica" else False,
+        "sol_adm": txt(d[33]), "fs_adm": txt(d[34]), "fr_adm": txt(d[35]), 
+        "rec_adm": txt(d[36]), "niv_adm": txt(d[38]),
+        
+        "responsable": f"{d[39]} ({d[40]})",
+        "ubicacion_detalle": txt(d[53]),
+        "hora_concentracion": txt(d[41]), "lugar_concentracion": txt(d[42]),
+        
+        "aplica_cam": True if d[43] == "Aplica" else False,
+        "camionetas": armar_lista_vehiculos(d[43], d[45]),
+        
+        "aplica_bus": True if d[46] == "Aplica" else False,
+        "busetas": armar_lista_vehiculos(d[46], d[48]),
+        
+        "aplica_aux": True if d[49] == "Aplica" else False,
+        "auxiliares": armar_lista_vehiculos(d[49], d[51]),
+        
+        "descripcion": txt(d[52]),
+        "nivel_texto": txt(d[54]),
+        "observaciones": txt(d[55]),
+        
+        "dias_ejecucion": txt(d[56]), "dias_com": txt(d[57]),
+        "dias_th": txt(d[58]), "dias_admin": txt(d[59])
+    }
+    
+    doc.render(context)
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
 
-    tit("1. Datos Generales")
-    lin("Área Institucional:", d[1])
-    lin("Nombre del Evento:", d[4])
-    lin("Tipo de Evento:", d[5])
-    lin("Responsable Planificación:", d[3])
-    lin("Lugar:", d[9])
-    lin("Fecha y Hora:", f"{d[10]} | {d[11]}")
-    lin("Inicio Planificación:", d[6])
-    lin("Organizador Externo:", f"{d[7]} (Cel: {d[8]})")
+def generar_word_hoja_ruta(d):
+    doc = DocxTemplate("HOJA DE RUTA EVENTO plantilla.docx")
     
-    pdf.ln(5)
-    tit("2. Entidades Externas")
-    lin("Aplica Externas:", d[12] if d[12]!="" else "No")
+    recursos = []
+    if d[16] == "Aplica" and d[17]: recursos.append(f"CULTURAS:\n{d[17]}")
+    if d[18] == "Aplica" and d[22]: recursos.append(f"COMUNICACIÓN:\n{d[22]}")
+    if d[32] == "Aplica" and d[36]: recursos.append(f"ADMINISTRACIÓN:\n{d[36]}")
+    recursos_str = "\n\n".join(recursos) if recursos else "-"
+
+    context = {
+        "evento": txt(d[4]), "lugar": txt(d[9]), "dia": txt(d[10]), "hora": txt(d[11]),
+        "lugar_concentracion": txt(d[42]), "hora_concentracion": txt(d[41]),
+        "responsable": f"{d[39]} ({d[40]})", "organizador": f"{d[7]} ({d[8]})",
+        
+        "aplica_cam": txt(d[43]),
+        "num_cam": txt(d[44]) if d[43]=="Aplica" else "-",
+        "cont_cam": txt(d[45]).replace('\n', ' | ') if d[43]=="Aplica" else "-",
+        
+        "aplica_bus": txt(d[46]),
+        "num_bus": txt(d[47]) if d[46]=="Aplica" else "-",
+        "cont_bus": txt(d[48]).replace('\n', ' | ') if d[46]=="Aplica" else "-",
+        
+        "aplica_aux": txt(d[49]),
+        "num_aux": txt(d[50]) if d[49]=="Aplica" else "-",
+        "cont_aux": txt(d[51]).replace('\n', ' | ') if d[49]=="Aplica" else "-",
+        
+        "recursos_totales": recursos_str,
+        "ubicacion_detalle": txt(d[53]),
+        "descripcion": txt(d[52])
+    }
     
-    pdf.ln(5)
-    tit("3. Áreas Internas")
-    lin("Culturas / Recreación:", f"Aplica: {d[16]} | Recursos: {d[17]}")
-    lin("Comunicación:", f"Aplica: {d[18]} | Cumplimiento: {d[23]}")
-    lin("Talento Humano:", f"Aplica: {d[25]} | Cumplimiento: {d[30]}")
-    lin("Administración:", f"Aplica: {d[32]} | Cumplimiento: {d[37]}")
-    
-    pdf.ln(5)
-    tit("4. Logística y Transporte")
-    lin("Resp. en territorio:", f"{d[39]} (Cel: {d[40]})")
-    lin("Vehículos / Personal:", f"Camionetas: {d[43]} | Busetas: {d[46]} | Auxiliares: {d[49]}")
-    lin("Descripción/Insumos:", d[52])
-    
-    pdf.ln(5)
-    tit("5. Evaluación Final")
-    lin("Estado del Evento:", d[59])
-    lin("Nivel de Ejecución:", d[53])
-    lin("Observaciones Finales:", d[54])
-    
-    salida = pdf.output(dest='S')
-    return salida.encode('latin-1') if isinstance(salida, str) else bytes(salida)
+    doc.render(context)
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 # ==========================================
 # 4. PANTALLAS DE INICIO Y BUSCADOR
@@ -244,7 +232,7 @@ elif st.session_state.pantalla == 'opciones_evento':
     with col1:
         if st.button("Nuevo Evento"):
             st.session_state.modo = "nuevo"
-            st.session_state.fila_datos = [""] * 60
+            st.session_state.fila_datos = [""] * 65
             st.session_state.pantalla = 'seccion_2'
             st.rerun()
     with col2:
@@ -267,7 +255,7 @@ elif st.session_state.pantalla == 'buscador_eventos':
             fila = todos_los_datos[i]
             if len(fila) > 4:
                 if fila[1] == st.session_state.area_seleccionada and fila[3] == resp_busqueda:
-                    estado = "Finalizado" if len(fila) >= 60 and fila[59] == "Finalizado" else "En proceso"
+                    estado = "Finalizado" if len(fila) >= 61 and fila[60] == "Finalizado" else "En proceso"
                     fecha_ev = fila[10] if len(fila) > 10 else "Sin Fecha"
                     unique_key = f"{fila[4]} (Fecha: {fecha_ev} - N° {fila[0]} - {estado})"
                     eventos_encontrados_dict[unique_key] = (i + 1, fila)
@@ -282,7 +270,7 @@ elif st.session_state.pantalla == 'buscador_eventos':
                 if st.button("Abrir Evento"):
                     fila_real, datos_fila = eventos_encontrados_dict[evento_seleccionado]
                     st.session_state.fila_actual = fila_real
-                    st.session_state.fila_datos = (datos_fila + [""] * 60)[:60]
+                    st.session_state.fila_datos = (datos_fila + [""] * 65)[:65]
                     st.session_state.pantalla = 'seccion_2'
                     st.rerun()
             with col1:
@@ -290,8 +278,8 @@ elif st.session_state.pantalla == 'buscador_eventos':
         else:
             st.warning("Aún no ha creado eventos.")
             if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
-    except:
-        st.error("Error al buscar.")
+    except Exception as e: # ¡ESTO ARREGLA EL ERROR DEL DOBLE CLIC!
+        st.error("Error al buscar. Vuelve a intentarlo.")
         if st.button("Regresar"): st.session_state.pantalla = 'opciones_evento'; st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
@@ -339,9 +327,9 @@ elif st.session_state.pantalla == 'seccion_2':
             fecha_evento = st.date_input("Fecha del evento", value=def_f_ev)
             inicio_org = st.date_input("Fecha de inicio de planificación", value=def_i_org)
         with c4:
-            hora_inicio = st.time_input("Hora de inicio", value=def_h_ev)
+            hora_inicio = st.time_input("Hora de inicio del evento", value=def_h_ev) # CAMBIADO
             con_fin = st.checkbox("¿Añadir hora de cierre?", value=con_fin_def)
-            if con_fin: hora_fin = st.time_input("Hora de cierre", value=def_h_fin)
+            if con_fin: hora_fin = st.time_input("Hora de cierre del evento", value=def_h_fin) # CAMBIADO
     
     st.write("---")
     with st.container():
@@ -372,10 +360,10 @@ elif st.session_state.pantalla == 'seccion_2':
             if st.session_state.modo == "nuevo" and not st.session_state.fila_actual:
                 num_filas = len(hoja_datos.col_values(1))
                 st.session_state.fila_datos[0] = str(num_filas)
-                st.session_state.fila_datos[59] = "En proceso"
+                st.session_state.fila_datos[60] = "En proceso"
                 hoja_datos.append_row(st.session_state.fila_datos)
                 st.session_state.fila_actual = num_filas + 1
-            elif not d[59]: st.session_state.fila_datos[59] = "En proceso"
+            elif not d[60]: st.session_state.fila_datos[60] = "En proceso"
             
             if btn_guardar: navegar('seccion_3')
             if btn_regresar: navegar('opciones_evento')
@@ -388,16 +376,16 @@ elif st.session_state.pantalla == 'seccion_3':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Entidades Externas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    aplica_def = 1 if str(d[12]).strip() != "" else 0
+    aplica_def = 1 if str(d[12]).strip() != "" and str(d[12]).strip() != "-" else 0
     aplica = st.radio("¿Aplica coordinación externa?", ["No aplica", "Aplica"], index=aplica_def)
     
     ent_str = ""; sol_str = ""; fs_str = ""; fr_str = ""
     
     if aplica == "Aplica":
-        e_ex = [x for x in str(d[12]).split('\n') if x.strip()]
-        s_ex = [x for x in str(d[13]).split('\n') if x.strip()]
-        fs_ex = [x for x in str(d[14]).split('\n') if x.strip()]
-        fr_ex = [x for x in str(d[15]).split('\n') if x.strip()]
+        e_ex = [x for x in str(d[12]).split('\n') if x.strip() and x.strip() != "-"]
+        s_ex = [x for x in str(d[13]).split('\n') if x.strip() and x.strip() != "-"]
+        fs_ex = [x for x in str(d[14]).split('\n') if x.strip() and x.strip() != "-"]
+        fr_ex = [x for x in str(d[15]).split('\n') if x.strip() and x.strip() != "-"]
         
         num_ent_def = len(e_ex) if len(e_ex) > 0 else 1
         if num_ent_def > 8: num_ent_def = 8
@@ -438,10 +426,10 @@ elif st.session_state.pantalla == 'seccion_3':
     st.write("---")
     col1, col2 = st.columns(2)
     if col1.button("⬅️ Regresar y Guardar"):
-        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["","","",""]
+        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["-","-","-","-"]
         navegar('seccion_2'); st.rerun()
     if col2.button("Guardar y Continuar ➡️"):
-        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["","","",""]
+        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["-","-","-","-"]
         navegar('seccion_4'); st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
@@ -456,24 +444,34 @@ elif st.session_state.pantalla == 'seccion_4':
     with tab1:
         st.markdown("#### Dirección de Culturas, Patrimonio y Recreación")
         ap_cult = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="r_cult", index=1 if d[16]=="Aplica" else 0)
-        rec_cult = st.text_area("Recursos entregados (Detalle)", value=d[17], height=150) if ap_cult == "Aplica" else ""
+        rec_cult = st.text_area("Recursos entregados (Detalle)", value=d[17] if d[17]!="-" else "", height=150) if ap_cult == "Aplica" else "-"
     
     def dib_dir(idx_base):
         ap = st.radio("¿Aplica?", ["No aplica", "Aplica"], key=f"ap_{idx_base}", index=1 if d[idx_base]=="Aplica" else 0)
         if ap == "Aplica":
-            sol = st.text_area("Solicitud realizada (Detalle)", value=d[idx_base+1], key=f"s_{idx_base}", height=100)
-            try: vfs = datetime.strptime(d[idx_base+2], "%d/%m/%Y").date() if d[idx_base+2] else date.today()
+            sol = st.text_area("Solicitud realizada (Detalle)", value=d[idx_base+1] if d[idx_base+1]!="-" else "", key=f"s_{idx_base}", height=100)
+            try: vfs = datetime.strptime(d[idx_base+2], "%d/%m/%Y").date() if d[idx_base+2] and d[idx_base+2]!="-" else date.today()
             except: vfs = date.today()
-            try: vfr = datetime.strptime(d[idx_base+3], "%d/%m/%Y").date() if d[idx_base+3] else date.today()
+            try: vfr = datetime.strptime(d[idx_base+3], "%d/%m/%Y").date() if d[idx_base+3] and d[idx_base+3]!="-" else date.today()
             except: vfr = date.today()
             c1, c2 = st.columns(2)
             with c1: fs = st.date_input("Fecha solicitud", value=vfs, key=f"fs_{idx_base}")
             with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{idx_base}")
-            rec = st.text_area("Recursos Entregados (Detalle)", value=d[idx_base+4], key=f"r_{idx_base}", height=100)
+            rec = st.text_area("Recursos Entregados (Detalle)", value=d[idx_base+4] if d[idx_base+4]!="-" else "", key=f"r_{idx_base}", height=100)
+            
             cp = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if d[idx_base+5]=="No" else 0)
-            nv = st.selectbox("Nivel de cumplimiento", ["1 (20%)", "2 (40%)", "3 (60%)", "4 (80%)"], key=f"n_{idx_base}")[0] if cp=="No" else "5"
+            
+            # CÁLCULO DE NIVEL DE CUMPLIMIENTO (1-9 o 10)
+            try: idx_nv = int(d[idx_base+6]) - 1 if str(d[idx_base+6]).isdigit() else 0
+            except: idx_nv = 0
+            if idx_nv > 8: idx_nv = 8 # Protección por si guardó "10" antes
+            
+            opciones_nv = ["1 (10%)", "2 (20%)", "3 (30%)", "4 (40%)", "5 (50%)", "6 (60%)", "7 (70%)", "8 (80%)", "9 (90%)"]
+            nv_val = st.selectbox("Nivel de cumplimiento", opciones_nv, key=f"n_{idx_base}", index=idx_nv)
+            nv = nv_val.split(" ")[0] if cp=="No" else "10"
+            
             return ["Aplica", sol, fs.strftime("%d/%m/%Y"), fr.strftime("%d/%m/%Y"), rec, cp, nv]
-        return ["No aplica", "", "", "", "", "", ""]
+        return ["No aplica", "-", "-", "-", "-", "-", "-"]
 
     with tab2: st.markdown("#### Dirección de Comunicación"); r_com = dib_dir(18)
     with tab3: st.markdown("#### Dirección de Talento Humano"); r_th = dib_dir(25)
@@ -498,14 +496,14 @@ elif st.session_state.pantalla == 'seccion_5':
     with st.container():
         st.markdown("#### 👤 Responsable en territorio")
         c1, c2 = st.columns(2)
-        with c1: resp_asiste = st.text_input("Nombre del responsable que asiste", value=d[39])
-        with c2: cel_asiste = st.text_input("Celular", max_chars=10, value=d[40])
+        with c1: resp_asiste = st.text_input("Nombre del responsable que asiste", value=d[39] if d[39]!="-" else "")
+        with c2: cel_asiste = st.text_input("Celular", max_chars=10, value=d[40] if d[40]!="-" else "")
         c3, c4 = st.columns(2)
         with c3:
-            try: hs_def = datetime.strptime(d[41], "%H:%M").time() if d[41] else datetime.now().time()
+            try: hs_def = datetime.strptime(d[41], "%H:%M").time() if d[41] and d[41]!="-" else datetime.now().time()
             except: hs_def = datetime.now().time()
-            hora_salida = st.time_input("Hora de salida hacia el evento", value=hs_def)
-        with c4: concentracion = st.text_input("Lugar de concentración", value=d[42])
+            hora_salida = st.time_input("Hora de concentración", value=hs_def) # CAMBIADO
+        with c4: concentracion = st.text_input("Lugar de concentración", value=d[42] if d[42]!="-" else "")
     
     celulares = [cel_asiste] if cel_asiste else []
     
@@ -523,7 +521,7 @@ elif st.session_state.pantalla == 'seccion_5':
                     if cel: celulares.append(cel)
                     if nom or cel: cont.append(f"{nom} ({cel})")
                 return ["Aplica", str(num), "\n".join(cont)]
-            return ["No aplica", "", ""]
+            return ["No aplica", "-", "-"]
 
     r_cam = dib_log("Camionetas", 15, 43)
     r_bus = dib_log("Busetas", 15, 46)
@@ -531,8 +529,8 @@ elif st.session_state.pantalla == 'seccion_5':
     
     with st.container():
         st.markdown("#### 📋 Detalles Operativos")
-        insumos = st.text_area("Descripción y requerimientos del evento (Resumen e insumos)", value=d[52], height=150)
-        ubicacion = st.text_input("Ubicación exacta / Link de Maps", value=d[53])
+        insumos = st.text_area("Descripción y requerimientos del evento", value=d[52] if d[52]!="-" else "", height=150) # CAMBIADO
+        ubicacion = st.text_area("Ubicación exacta / Link de Maps", value=d[53] if d[53]!="-" else "", height=100) # CAMBIADO
 
     st.write("---")
     col1, col2 = st.columns(2)
@@ -556,22 +554,27 @@ elif st.session_state.pantalla == 'seccion_6':
     
     with st.container():
         try:
-            val_idx = int(str(d[53]).strip()[0]) - 1
+            val_idx = int(str(d[54]).strip()[0]) - 1
             if val_idx < 0 or val_idx > 4: val_idx = 4
         except:
             val_idx = 4
             
         nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"], index=val_idx)
-        obs = st.text_area("Observaciones Finales", value=d[54])
+        obs = st.text_area("Observaciones Finales", value=d[55] if d[55]!="-" else "")
     
-    st.markdown("#### 📥 Descargar Documentos Generados")
+    # RECUERDA: Ahora descargamos .DOCX (Word)
+    st.markdown("#### 📥 Descargar Documentos en Word")
     col_pdf1, col_pdf2 = st.columns(2)
-    with col_pdf1:
-        pdf_ruta = generar_pdf_hoja_ruta(d)
-        st.download_button(label="📄 Descargar Hoja de Ruta Operativa", data=pdf_ruta, file_name=f"Hoja_Ruta_{d[4]}.pdf", mime="application/pdf")
-    with col_pdf2:
-        pdf_exp = generar_pdf_expediente(d)
-        st.download_button(label="📑 Descargar Expediente Completo", data=pdf_exp, file_name=f"Expediente_{d[4]}.pdf", mime="application/pdf")
+    
+    try:
+        with col_pdf1:
+            word_ruta = generar_word_hoja_ruta(d)
+            st.download_button(label="📝 Descargar Hoja de Ruta", data=word_ruta, file_name=f"Hoja_Ruta_{d[4]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        with col_pdf2:
+            word_exp = generar_word_expediente(d)
+            st.download_button(label="📑 Descargar Expediente", data=word_exp, file_name=f"Expediente_{d[4]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    except Exception as e:
+        st.error(f"Sube las dos plantillas de Word a GitHub para habilitar las descargas. Detalles: {e}")
 
     st.write("---")
     c1, c2, c3 = st.columns(3)
@@ -582,7 +585,7 @@ elif st.session_state.pantalla == 'seccion_6':
     if btn_eliminar: st.session_state.confirmar_eliminar = True
         
     if st.session_state.confirmar_eliminar:
-        st.warning("⚠️ ¿Estás completamente seguro de que deseas eliminar este evento? Esta acción no se puede deshacer.")
+        st.warning("⚠️ ¿Estás completamente seguro de que deseas eliminar este evento?")
         cx1, cx2 = st.columns(2)
         with cx1:
             if st.button("✔️ Sí, eliminar permanentemente"):
@@ -597,10 +600,10 @@ elif st.session_state.pantalla == 'seccion_6':
             if st.button("❌ Cancelar"): st.session_state.confirmar_eliminar = False; st.rerun()
 
     if not st.session_state.confirmar_eliminar and (btn_terminar or btn_regresar):
-        st.session_state.fila_datos[53] = nivel_ejec[0]
-        st.session_state.fila_datos[54] = obs
+        st.session_state.fila_datos[54] = nivel_ejec
+        st.session_state.fila_datos[55] = obs
         if btn_terminar:
-            st.session_state.fila_datos[59] = "Finalizado"
+            st.session_state.fila_datos[60] = "Finalizado"
             guardar_en_excel(); st.success("🎉 ¡Evento Finalizado!"); reset_app()
         if btn_regresar: navegar('seccion_5'); st.rerun()
 
