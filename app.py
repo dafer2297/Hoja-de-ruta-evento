@@ -110,21 +110,14 @@ def fecha_elegante(fecha_str):
     except:
         return fecha_str 
 
-def armar_columnas(aplica, contactos_str):
-    """Convierte la lista de contactos en columnas para Word de forma automática"""
-    if aplica != "Aplica" or not contactos_str or contactos_str == "-": 
-        return "", ""
-    lineas = [x.strip() for x in str(contactos_str).split('\n') if x.strip() and x.strip() != "-"]
-    col_num = "\n".join([str(i+1) for i in range(len(lineas))])
-    col_cont = "\n".join(lineas)
-    return col_num, col_cont
+def armar_lista_vehiculos(aplica, contactos_str):
+    """Crea la lista dinámica que duplicará las filas en Word automáticamente"""
+    if aplica != "Aplica": return []
+    lineas = [x for x in str(contactos_str).split('\n') if x.strip() and x.strip() != "-"]
+    return [{"num": str(i+1), "contacto": lineas[i]} for i in range(len(lineas))]
 
 def generar_word_expediente(d):
     doc = DocxTemplate("Expediente del evento plantilla.docx")
-    
-    num_cam, cont_cam = armar_columnas(d[43], d[45])
-    num_bus, cont_bus = armar_columnas(d[46], d[48])
-    num_aux, cont_aux = armar_columnas(d[49], d[51])
     
     context = {
         "evento": txt(d[4]), "estado": txt(d[60]), 
@@ -159,13 +152,13 @@ def generar_word_expediente(d):
         "hora_concentracion": txt(d[41]), "lugar_concentracion": txt(d[42]),
         
         "aplica_cam": True if d[43] == "Aplica" else False,
-        "num_cam": num_cam, "cont_cam": cont_cam,
+        "camionetas": armar_lista_vehiculos(d[43], d[45]),
         
         "aplica_bus": True if d[46] == "Aplica" else False,
-        "num_bus": num_bus, "cont_bus": cont_bus,
+        "busetas": armar_lista_vehiculos(d[46], d[48]),
         
         "aplica_aux": True if d[49] == "Aplica" else False,
-        "num_aux": num_aux, "cont_aux": cont_aux,
+        "auxiliares": armar_lista_vehiculos(d[49], d[51]),
         
         "descripcion": txt(d[52]), "nivel_texto": txt(d[54]), "observaciones": txt(d[55]),
         "dias_ejecucion": txt(d[56]), "dias_com": txt(d[57]),
@@ -193,17 +186,14 @@ def generar_word_hoja_ruta(d):
         "lugar_concentracion": txt(d[42]), "hora_concentracion": txt(d[41]),
         "responsable": f"{d[39]} ({d[40]})", "organizador": f"{d[7]} ({d[8]})",
         
-        "aplica_cam": txt(d[43]),
-        "num_cam": txt(d[44]) if d[43]=="Aplica" else "-",
-        "cont_cam": txt(d[45]).replace('\n', ' | ') if d[43]=="Aplica" else "-",
+        "aplica_cam": True if d[43] == "Aplica" else False,
+        "camionetas": armar_lista_vehiculos(d[43], d[45]),
         
-        "aplica_bus": txt(d[46]),
-        "num_bus": txt(d[47]) if d[46]=="Aplica" else "-",
-        "cont_bus": txt(d[48]).replace('\n', ' | ') if d[46]=="Aplica" else "-",
+        "aplica_bus": True if d[46] == "Aplica" else False,
+        "busetas": armar_lista_vehiculos(d[46], d[48]),
         
-        "aplica_aux": txt(d[49]),
-        "num_aux": txt(d[50]) if d[49]=="Aplica" else "-",
-        "cont_aux": txt(d[51]).replace('\n', ' | ') if d[49]=="Aplica" else "-",
+        "aplica_aux": True if d[49] == "Aplica" else False,
+        "auxiliares": armar_lista_vehiculos(d[49], d[51]),
         
         "recursos_totales": recursos_str, "ubicacion_detalle": txt(d[53]), "descripcion": txt(d[52])
     }
@@ -588,8 +578,7 @@ elif st.session_state.pantalla == 'seccion_6':
             word_exp = generar_word_expediente(d)
             st.download_button(label="📑 Descargar Expediente", data=word_exp, file_name=f"Expediente_{d[4]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     except Exception as e:
-        # AQUÍ ESTÁ EL CÓDIGO CORREGIDO PARA QUE NO EXPLOTE
-        st.error(f"Error al generar el documento. Detalles: {e}")
+        st.error(f"Error al generar el documento. Verifica las etiquetas en Word. Detalles: {e}")
 
     st.write("---")
     c1, c2, c3 = st.columns(3)
