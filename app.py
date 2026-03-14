@@ -588,7 +588,8 @@ elif st.session_state.pantalla == 'seccion_6':
             word_exp = generar_word_expediente(d)
             st.download_button(label="📑 Descargar Expediente", data=word_exp, file_name=f"Expediente_{d[4]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     except Exception as e:
-        st.error(f"Error al generar. Verifica que quitaste los códigos {%tr%} de tu Word. Detalles: {e}")
+        # AQUÍ ESTÁ EL CÓDIGO CORREGIDO PARA QUE NO EXPLOTE
+        st.error(f"Error al generar el documento. Detalles: {e}")
 
     st.write("---")
     c1, c2, c3 = st.columns(3)
