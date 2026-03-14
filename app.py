@@ -78,7 +78,6 @@ def actualizar_calculos_automaticos():
     d[59] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else "-"
 
 def parse_time(time_str):
-    # SOLUCIÓN: Si está vacío, retorna 'None' para que la casilla se vea completamente en blanco
     if not time_str or str(time_str).strip() == "-": return None
     for fmt in ("%H:%M %p", "%I:%M %p", "%H:%M", "%H:%M:%S"):
         try:
@@ -253,6 +252,9 @@ def generar_word_hoja_ruta(d):
     if d[32] == "Aplica" and d[36]: recursos.append(f"ADMINISTRACIÓN:\n{d[36]}")
     recursos_str = "\n\n".join(recursos) if recursos else "-"
 
+    def formato_en_linea(val):
+        return str(val).replace('\n', ' | ') if val and str(val) != "-" else "-"
+
     context = {
         "evento": txt(d[4]), "lugar": txt(d[9]), 
         "dia": fecha_elegante(txt(d[10])), "hora": txt(d[11]),
@@ -413,10 +415,10 @@ elif st.session_state.pantalla == 'seccion_2':
     st.write("---")
     with st.container():
         st.markdown("#### 📅 2. Fechas y Horarios")
-        try: def_i_org = datetime.strptime(d[6], "%d/%m/%Y").date() if d[6] else date.today()
-        except: def_i_org = date.today()
-        try: def_f_ev = datetime.strptime(d[10], "%d/%m/%Y").date() if d[10] else date.today()
-        except: def_f_ev = date.today()
+        try: def_i_org = datetime.strptime(d[6], "%d/%m/%Y").date() if d[6] and d[6] != "-" else None
+        except: def_i_org = None
+        try: def_f_ev = datetime.strptime(d[10], "%d/%m/%Y").date() if d[10] and d[10] != "-" else None
+        except: def_f_ev = None
         
         con_fin_def = False
         try:
@@ -459,8 +461,9 @@ elif st.session_state.pantalla == 'seccion_2':
     with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
         
     if btn_guardar or btn_regresar:
-        if nombre_evento.strip() == "" or nombre_org.strip() == "" or celular_org.strip() == "" or lugar_evento.strip() == "":
-            st.error("❌ Debes llenar todos los campos (Nombre, Lugar y Datos del Organizador).")
+        # Se añade "not fecha_evento" para obligar a que pongan fecha (y sacar el mes automáticamente)
+        if nombre_evento.strip() == "" or nombre_org.strip() == "" or celular_org.strip() == "" or lugar_evento.strip() == "" or not fecha_evento:
+            st.error("❌ Debes llenar todos los campos obligatorios (Nombre, Lugar, Fecha y Datos del Organizador).")
         elif not celular_org.isdigit() or len(celular_org) != 10:
             st.error("❌ El celular debe tener 10 dígitos numéricos.")
         else:
@@ -473,7 +476,11 @@ elif st.session_state.pantalla == 'seccion_2':
             else:
                 hora_str = hi_str
             
-            st.session_state.fila_datos[1:12] = [st.session_state.area_seleccionada, meses[fecha_evento.month-1], responsable, nombre_evento, tipo_evento, inicio_org.strftime("%d/%m/%Y"), nombre_org, celular_org, lugar_evento, fecha_evento.strftime("%d/%m/%Y"), hora_str]
+            fe_str = fecha_evento.strftime("%d/%m/%Y")
+            mes_str = meses[fecha_evento.month-1]
+            io_str = inicio_org.strftime("%d/%m/%Y") if inicio_org else "-"
+
+            st.session_state.fila_datos[1:12] = [st.session_state.area_seleccionada, mes_str, responsable, nombre_evento, tipo_evento, io_str, nombre_org, celular_org, lugar_evento, fe_str, hora_str]
             
             if st.session_state.modo == "nuevo" and not st.session_state.fila_actual:
                 num_filas = len(hoja_datos.col_values(1))
@@ -524,11 +531,11 @@ elif st.session_state.pantalla == 'seccion_3':
                 vfs_str = clean_val(fs_ex[i] if i < len(fs_ex) else "")
                 vfr_str = clean_val(fr_ex[i] if i < len(fr_ex) else "")
                 
-                try: vfs = datetime.strptime(vfs_str, "%d/%m/%Y").date()
-                except: vfs = date.today()
+                try: vfs = datetime.strptime(vfs_str, "%d/%m/%Y").date() if vfs_str and vfs_str != "-" else None
+                except: vfs = None
                 
-                try: vfr = datetime.strptime(vfr_str, "%d/%m/%Y").date()
-                except: vfr = date.today()
+                try: vfr = datetime.strptime(vfr_str, "%d/%m/%Y").date() if vfr_str and vfr_str != "-" else None
+                except: vfr = None
 
                 nom = st.text_input("Nombre de la entidad", value=vn, key=f"e_{i}")
                 sol = st.text_area("Solicitud realizada", value=vs, key=f"s_{i}")
@@ -539,8 +546,8 @@ elif st.session_state.pantalla == 'seccion_3':
                 if nom.strip(): 
                     l_nom.append(nom)
                     l_sol.append(sol)
-                    l_fs.append(fs.strftime('%d/%m/%Y'))
-                    l_fr.append(fr.strftime('%d/%m/%Y'))
+                    l_fs.append(fs.strftime('%d/%m/%Y') if fs else "-")
+                    l_fr.append(fr.strftime('%d/%m/%Y') if fr else "-")
                     
         ent_str="\n".join(l_nom); sol_str="\n".join(l_sol); fs_str="\n".join(l_fs); fr_str="\n".join(l_fr)
         
@@ -571,10 +578,12 @@ elif st.session_state.pantalla == 'seccion_4':
         ap = st.radio("¿Aplica?", ["No aplica", "Aplica"], key=f"ap_{idx_base}", index=1 if d[idx_base]=="Aplica" else 0)
         if ap == "Aplica":
             sol = st.text_area("Solicitud realizada (Detalle)", value=d[idx_base+1] if d[idx_base+1]!="-" else "", key=f"s_{idx_base}", height=100)
-            try: vfs = datetime.strptime(d[idx_base+2], "%d/%m/%Y").date() if d[idx_base+2] and d[idx_base+2]!="-" else date.today()
-            except: vfs = date.today()
-            try: vfr = datetime.strptime(d[idx_base+3], "%d/%m/%Y").date() if d[idx_base+3] and d[idx_base+3]!="-" else date.today()
-            except: vfr = date.today()
+            
+            try: vfs = datetime.strptime(d[idx_base+2], "%d/%m/%Y").date() if d[idx_base+2] and d[idx_base+2]!="-" else None
+            except: vfs = None
+            try: vfr = datetime.strptime(d[idx_base+3], "%d/%m/%Y").date() if d[idx_base+3] and d[idx_base+3]!="-" else None
+            except: vfr = None
+            
             c1, c2 = st.columns(2)
             with c1: fs = st.date_input("Fecha solicitud", value=vfs, key=f"fs_{idx_base}")
             with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{idx_base}")
@@ -590,7 +599,9 @@ elif st.session_state.pantalla == 'seccion_4':
             nv_val = st.selectbox("Nivel de cumplimiento", opciones_nv, key=f"n_{idx_base}", index=idx_nv)
             nv = nv_val.split(" ")[0] if cp=="No" else "10"
             
-            return ["Aplica", sol, fs.strftime("%d/%m/%Y"), fr.strftime("%d/%m/%Y"), rec, cp, nv]
+            fs_save = fs.strftime("%d/%m/%Y") if fs else "-"
+            fr_save = fr.strftime("%d/%m/%Y") if fr else "-"
+            return ["Aplica", sol, fs_save, fr_save, rec, cp, nv]
         return ["No aplica", "-", "-", "-", "-", "-", "-"]
 
     with tab2: st.markdown("#### Dirección de Comunicación"); r_com = dib_dir(18)
@@ -727,7 +738,6 @@ elif st.session_state.pantalla == 'seccion_6':
             if st.button("✔️ Sí, eliminar permanentemente"):
                 if st.session_state.fila_actual:
                     try:
-                        # SOLUCIÓN DE BORRADO: Elimina específicamente la fila sin confundir al sistema.
                         hoja_datos.delete_rows(st.session_state.fila_actual)
                         st.success("🗑️ Evento borrado.")
                         st.session_state.pantalla = 'inicio'
