@@ -747,3 +747,135 @@ elif st.session_state.pantalla == 'seccion_6':
 
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
+# ==========================================
+# BOTÓN MÁGICO PARA GENERAR 100 EVENTOS (NIVEL DIOS - TODOS LOS CAMPOS)
+# ==========================================
+if st.session_state.pantalla == 'inicio':
+    st.write("---")
+    st.markdown("### 🛠️ Zona de Pruebas (Borrar después)")
+    if st.button("🚀 INYECTAR 100 EVENTOS AL MÁXIMO (TODOS LOS CAMPOS)"):
+        import random
+        from datetime import timedelta
+        
+        eventos_cultura = ["Festival de Danza Folclórica", "Noche de Museos", "Feria de Artesanías", "Concierto Sinfónico", "Exposición de Pintura Local"]
+        eventos_recreacion = ["Ciclovía Dominical", "Torneo de Fútbol Comunitario", "Bailoterapia Masiva", "Juegos Tradicionales", "Caminata Ecológica"]
+        lugares = ["Parque Calderón", "Parque de la Madre", "Plaza San Francisco", "Coliseo Jefferson Pérez", "Teatro Sucre"]
+        organizadores = ["Juan Pérez", "María López", "Carlos Guamán", "Diana Torres", "Andrés Castro"]
+        meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
+        def generar_celular(): return f"09{random.randint(10000000, 99999999)}"
+        
+        nuevos_eventos = []
+        num_filas_actual = len(hoja_datos.col_values(1))
+        
+        with st.spinner("Generando 100 eventos llenando TODOS los campos... ¡Espera unos 15 segundos!"):
+            for i in range(1, 101):
+                fila = ["-"] * 65
+                
+                # 1. DATOS GENERALES
+                if i % 2 == 0:
+                    area = "Culturas y Patrimonio"
+                    nombre = f"{random.choice(eventos_cultura)} Edición {random.randint(1, 5)}"
+                    responsable = f"Responsable {random.randint(1, 5)}"
+                else:
+                    area = "Recreación"
+                    nombre = f"{random.choice(eventos_recreacion)} Sector {random.randint(1, 10)}"
+                    responsable = f"Responsable {random.randint(6, 8)}"
+                    
+                fecha_ev_obj = datetime(2025, random.randint(1, 12), random.randint(1, 28))
+                fecha_plan_obj = fecha_ev_obj - timedelta(days=random.randint(5, 30))
+                estado = random.choice(["Finalizado", "En proceso", "Finalizado", "Finalizado"])
+                
+                fila[0] = str(num_filas_actual + i)
+                fila[1] = area
+                fila[2] = meses[fecha_ev_obj.month - 1]
+                fila[3] = responsable
+                fila[4] = nombre
+                fila[5] = random.choice(["Propio", "Apoyo"])
+                fila[6] = fecha_plan_obj.strftime("%d/%m/%Y")
+                fila[7] = random.choice(organizadores)
+                fila[8] = generar_celular()
+                fila[9] = random.choice(lugares)
+                fila[10] = fecha_ev_obj.strftime("%d/%m/%Y")
+                fila[11] = "09:00 AM - 01:00 PM"
+                
+                # 2. ENTIDADES EXTERNAS
+                if random.choice([True, False]):
+                    fila[12] = "1. Cruz Roja\n2. Policía Nacional"
+                    fila[13] = "1. Ambulancia y paramédicos\n2. Resguardo de seguridad ciudadana"
+                    fila[14] = (fecha_plan_obj + timedelta(days=1)).strftime("%d/%m/%Y") + "\n" + (fecha_plan_obj + timedelta(days=1)).strftime("%d/%m/%Y")
+                    fila[15] = (fecha_plan_obj + timedelta(days=3)).strftime("%d/%m/%Y") + "\n" + (fecha_plan_obj + timedelta(days=4)).strftime("%d/%m/%Y")
+
+                # 3. ÁREAS INTERNAS (CULTURAS, COMUNICACIÓN, TH, ADMIN)
+                if random.choice([True, False]): # Culturas
+                    fila[16] = "Aplica"
+                    fila[17] = "3 Carpas de 4x4, 20 Sillas, 1 Sistema de sonido básico."
+                else: fila[16] = "No aplica"
+
+                if random.choice([True, False]): # Comunicación
+                    fila[18] = "Aplica"
+                    fila[19] = "Cobertura fotográfica y transmisión en vivo."
+                    fila[20] = (fecha_plan_obj + timedelta(days=2)).strftime("%d/%m/%Y")
+                    fila[21] = (fecha_plan_obj + timedelta(days=4)).strftime("%d/%m/%Y")
+                    fila[22] = "2 Fotógrafos asignados."
+                    fila[23] = "Sí"
+                    fila[24] = "10"
+                else: fila[18] = "No aplica"
+
+                if random.choice([True, False]): # Talento Humano
+                    fila[25] = "Aplica"
+                    fila[26] = "Personal de apoyo para logística (3 personas)."
+                    fila[27] = (fecha_plan_obj + timedelta(days=1)).strftime("%d/%m/%Y")
+                    fila[28] = (fecha_plan_obj + timedelta(days=3)).strftime("%d/%m/%Y")
+                    fila[29] = "3 técnicos asignados."
+                    fila[30] = "Sí"
+                    fila[31] = "10"
+                else: fila[25] = "No aplica"
+
+                if random.choice([True, False]): # Administración
+                    fila[32] = "Aplica"
+                    fila[33] = "Permiso de uso de suelo y viáticos."
+                    fila[34] = (fecha_plan_obj + timedelta(days=1)).strftime("%d/%m/%Y")
+                    fila[35] = (fecha_plan_obj + timedelta(days=5)).strftime("%d/%m/%Y")
+                    fila[36] = "Trámites aprobados."
+                    fila[37] = "Sí"
+                    fila[38] = "10"
+                else: fila[32] = "No aplica"
+
+                # 4. LOGÍSTICA (VEHÍCULOS Y AUXILIARES)
+                fila[39] = "Carlos Técnico"
+                fila[40] = generar_celular()
+                fila[41] = "08:00"
+                fila[42] = "Patio de la Prefectura"
+
+                if random.choice([True, False]): # Camionetas
+                    fila[43] = "Aplica"
+                    fila[44] = "1\n2"
+                    fila[45] = f"Chofer Camioneta 1 ({generar_celular()})\nChofer Camioneta 2 ({generar_celular()})"
+                else: fila[43] = "No aplica"
+
+                if random.choice([True, False]): # Busetas
+                    fila[46] = "Aplica"
+                    fila[47] = "1"
+                    fila[48] = f"Chofer Buseta 1 ({generar_celular()})"
+                else: fila[46] = "No aplica"
+
+                if random.choice([True, False]): # Auxiliares
+                    fila[49] = "Aplica"
+                    fila[50] = "1\n2\n3"
+                    fila[51] = f"Auxiliar 1 ({generar_celular()})\nAuxiliar 2 ({generar_celular()})\nAuxiliar 3 ({generar_celular()})"
+                else: fila[49] = "No aplica"
+
+                # 5. DETALLES FINALES
+                fila[52] = "Evento masivo que requiere vallado de seguridad y puntos de hidratación."
+                fila[53] = "Junto a la iglesia central"
+
+                if estado == "Finalizado":
+                    fila[54] = random.choice(["3 (Regular)", "4 (Bueno)", "5 (Perfecto)"])
+                    fila[55] = "El evento se desarrolló con total normalidad y buena acogida ciudadana."
+                    
+                fila[60] = estado
+                nuevos_eventos.append(fila)
+
+            hoja_datos.append_rows(nuevos_eventos)
+            st.success("✅ ¡BINGO! 100 eventos creados con TODOS LOS CAMPOS ACTIVOS AL AZAR. ¡Ve a Buscar Eventos!")
