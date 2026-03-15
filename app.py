@@ -63,22 +63,22 @@ if 'confirmar_terminar' not in st.session_state: st.session_state.confirmar_term
 if 'fila_datos' not in st.session_state: st.session_state.fila_datos = [""] * 65
 
 def calcular_dias(fecha_inicio, fecha_fin):
-    if not fecha_inicio or not fecha_fin or fecha_inicio == "-" or fecha_fin == "-": return "-"
+    if not fecha_inicio or not fecha_fin or str(fecha_inicio).strip() == "" or str(fecha_fin).strip() == "": return ""
     try:
-        d1 = datetime.strptime(fecha_inicio, "%d/%m/%Y").date()
-        d2 = datetime.strptime(fecha_fin, "%d/%m/%Y").date()
-        return str((d2 - d1).days)
-    except: return "-"
+        d1 = datetime.strptime(str(fecha_inicio).strip(), "%d/%m/%Y").date()
+        d2 = datetime.strptime(str(fecha_fin).strip(), "%d/%m/%Y").date()
+        return int((d2 - d1).days) # Devuelve número entero para Power BI
+    except: return ""
 
 def actualizar_calculos_automaticos():
     d = st.session_state.fila_datos
     d[56] = calcular_dias(d[6], d[10])
-    d[57] = calcular_dias(d[20], d[21]) if d[18] == "Aplica" else "-"
-    d[58] = calcular_dias(d[27], d[28]) if d[25] == "Aplica" else "-"
-    d[59] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else "-"
+    d[57] = calcular_dias(d[20], d[21]) if d[18] == "Aplica" else ""
+    d[58] = calcular_dias(d[27], d[28]) if d[25] == "Aplica" else ""
+    d[59] = calcular_dias(d[34], d[35]) if d[32] == "Aplica" else ""
 
 def parse_time(time_str):
-    if not time_str or str(time_str).strip() == "-": return None
+    if not time_str or str(time_str).strip() == "" or str(time_str).strip() == "-": return None
     for fmt in ("%H:%M %p", "%I:%M %p", "%H:%M", "%H:%M:%S"):
         try:
             return datetime.strptime(str(time_str).strip(), fmt).time()
@@ -109,28 +109,29 @@ def reset_app():
 # 3. GENERADORES DE PLANTILLAS WORD
 # ==========================================
 def txt(texto):
+    # Protege el Word: Si el Excel está vacío, imprime un guion para que no se descuadre
     return str(texto) if texto and str(texto).strip() != "" else "-"
 
 def formato_porcentaje(val):
     try:
-        if not val or str(val).strip() == "-" or str(val).strip() == "": return "-"
+        if str(val).strip() == "": return "-"
         num = int(str(val).strip())
         return f"{num * 10}%"
     except:
-        return str(val)
+        return str(val) if val else "-"
 
 def formato_nivel(val):
     val_str = str(val).strip()
     if "(" in val_str and ")" in val_str:
         return val_str.split("(")[1].replace(")", "").strip()
-    return val_str if val_str and val_str != "-" else "-"
+    return val_str if val_str and val_str != "" else "-"
 
 def fecha_elegante(fecha_str):
-    if not fecha_str or fecha_str == "-": return "-"
+    if not fecha_str or str(fecha_str).strip() == "": return "-"
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     try:
-        f = datetime.strptime(fecha_str.strip(), "%d/%m/%Y")
+        f = datetime.strptime(str(fecha_str).strip(), "%d/%m/%Y")
         return f"{dias[f.weekday()]}, {f.day} de {meses[f.month-1]} de {f.year}"
     except:
         return fecha_str 
@@ -152,7 +153,7 @@ def rellenar_vehiculos(context, prefijo, aplica, contactos_str, limite):
     if aplica != "Aplica":
         lista = []
     else:
-        lineas = [x.strip() for x in str(contactos_str).split('\n') if x.strip() and x.strip() != "-"]
+        lineas = [x.strip() for x in str(contactos_str).split('\n') if x.strip() and x.strip() != ""]
         lista = [{"num": str(i+1), "contacto": lineas[i]} for i in range(len(lineas))]
         
     for i in range(1, limite + 1):
@@ -166,17 +167,16 @@ def rellenar_vehiculos(context, prefijo, aplica, contactos_str, limite):
 def rellenar_entidades(context, n_str, s_str, fs_str, fr_str):
     def clean_prefix(val):
         val = str(val).strip()
-        if len(val) >= 3 and val[0].isdigit() and val[1:3] == ". ":
-            return val[3:]
+        if len(val) >= 3 and val[0].isdigit() and val[1:3] == ". ": return val[3:]
         return val
 
-    if not n_str or str(n_str).strip() == "-":
+    if not n_str or str(n_str).strip() == "":
         nombres, sols, fss, frs = [], [], [], []
     else:
-        nombres = [clean_prefix(x) for x in str(n_str).split('\n') if x.strip() and x.strip() != "-"]
-        sols = [clean_prefix(x) for x in str(s_str).split('\n') if x.strip() and x.strip() != "-"]
-        fss = [clean_prefix(x) for x in str(fs_str).split('\n') if x.strip() and x.strip() != "-"]
-        frs = [clean_prefix(x) for x in str(fr_str).split('\n') if x.strip() and x.strip() != "-"]
+        nombres = [clean_prefix(x) for x in str(n_str).split('\n') if x.strip()]
+        sols = [clean_prefix(x) for x in str(s_str).split('\n') if x.strip()]
+        fss = [clean_prefix(x) for x in str(fs_str).split('\n') if x.strip()]
+        frs = [clean_prefix(x) for x in str(fr_str).split('\n') if x.strip()]
         
     for i in range(1, 9):
         if i <= len(nombres):
@@ -253,7 +253,7 @@ def generar_word_hoja_ruta(d):
     recursos_str = "\n\n".join(recursos) if recursos else "-"
 
     def formato_en_linea(val):
-        return str(val).replace('\n', ' | ') if val and str(val) != "-" else "-"
+        return str(val).replace('\n', ' | ') if val and str(val).strip() != "" else "-"
 
     context = {
         "evento": txt(d[4]), "lugar": txt(d[9]), 
@@ -415,15 +415,15 @@ elif st.session_state.pantalla == 'seccion_2':
     st.write("---")
     with st.container():
         st.markdown("#### 📅 2. Fechas y Horarios")
-        try: def_i_org = datetime.strptime(d[6], "%d/%m/%Y").date() if d[6] and d[6] != "-" else None
+        try: def_i_org = datetime.strptime(d[6], "%d/%m/%Y").date() if d[6] and d[6] != "" else None
         except: def_i_org = None
-        try: def_f_ev = datetime.strptime(d[10], "%d/%m/%Y").date() if d[10] and d[10] != "-" else None
+        try: def_f_ev = datetime.strptime(d[10], "%d/%m/%Y").date() if d[10] and d[10] != "" else None
         except: def_f_ev = None
         
         con_fin_def = False
         try:
             val_hora = str(d[11]).strip()
-            if "-" in val_hora and val_hora != "-":
+            if "-" in val_hora and val_hora != "":
                 partes = val_hora.split("-")
                 def_h_ev = parse_time(partes[0])
                 def_h_fin = parse_time(partes[1]) if len(partes) > 1 else None
@@ -461,7 +461,6 @@ elif st.session_state.pantalla == 'seccion_2':
     with col_btn2: btn_guardar = st.button("Guardar y Continuar ➡️")
         
     if btn_guardar or btn_regresar:
-        # Se añade "not fecha_evento" para obligar a que pongan fecha (y sacar el mes automáticamente)
         if nombre_evento.strip() == "" or nombre_org.strip() == "" or celular_org.strip() == "" or lugar_evento.strip() == "" or not fecha_evento:
             st.error("❌ Debes llenar todos los campos obligatorios (Nombre, Lugar, Fecha y Datos del Organizador).")
         elif not celular_org.isdigit() or len(celular_org) != 10:
@@ -469,16 +468,16 @@ elif st.session_state.pantalla == 'seccion_2':
         else:
             meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
             
-            hi_str = hora_inicio.strftime("%I:%M %p") if hora_inicio else "-"
+            hi_str = hora_inicio.strftime("%I:%M %p") if hora_inicio else ""
             if con_fin and 'hora_fin' in locals() and hora_fin:
                 hf_str = hora_fin.strftime("%I:%M %p")
                 hora_str = f"{hi_str} - {hf_str}"
             else:
                 hora_str = hi_str
             
-            fe_str = fecha_evento.strftime("%d/%m/%Y")
-            mes_str = meses[fecha_evento.month-1]
-            io_str = inicio_org.strftime("%d/%m/%Y") if inicio_org else "-"
+            fe_str = fecha_evento.strftime("%d/%m/%Y") if fecha_evento else ""
+            mes_str = meses[fecha_evento.month-1] if fecha_evento else ""
+            io_str = inicio_org.strftime("%d/%m/%Y") if inicio_org else ""
 
             st.session_state.fila_datos[1:12] = [st.session_state.area_seleccionada, mes_str, responsable, nombre_evento, tipo_evento, io_str, nombre_org, celular_org, lugar_evento, fe_str, hora_str]
             
@@ -501,7 +500,7 @@ elif st.session_state.pantalla == 'seccion_3':
     st.markdown("<h3 style='text-align: center; color: white;'>Coordinación con Entidades Externas</h3>", unsafe_allow_html=True)
     d = st.session_state.fila_datos
     
-    aplica_def = 1 if str(d[12]).strip() != "" and str(d[12]).strip() != "-" else 0
+    aplica_def = 1 if str(d[12]).strip() != "" else 0
     aplica = st.radio("¿Aplica coordinación externa?", ["No aplica", "Aplica"], index=aplica_def)
     
     ent_str = ""; sol_str = ""; fs_str = ""; fr_str = ""
@@ -513,10 +512,10 @@ elif st.session_state.pantalla == 'seccion_3':
                 return val[3:]
             return val
 
-        e_ex = [x for x in str(d[12]).split('\n') if x.strip() and x.strip() != "-"]
-        s_ex = [x for x in str(d[13]).split('\n') if x.strip() and x.strip() != "-"]
-        fs_ex = [x for x in str(d[14]).split('\n') if x.strip() and x.strip() != "-"]
-        fr_ex = [x for x in str(d[15]).split('\n') if x.strip() and x.strip() != "-"]
+        e_ex = [x for x in str(d[12]).split('\n') if x.strip()]
+        s_ex = [x for x in str(d[13]).split('\n') if x.strip()]
+        fs_ex = [x for x in str(d[14]).split('\n') if x.strip()]
+        fr_ex = [x for x in str(d[15]).split('\n') if x.strip()]
         
         num_ent_def = len(e_ex) if len(e_ex) > 0 else 1
         if num_ent_def > 8: num_ent_def = 8
@@ -531,10 +530,10 @@ elif st.session_state.pantalla == 'seccion_3':
                 vfs_str = clean_val(fs_ex[i] if i < len(fs_ex) else "")
                 vfr_str = clean_val(fr_ex[i] if i < len(fr_ex) else "")
                 
-                try: vfs = datetime.strptime(vfs_str, "%d/%m/%Y").date() if vfs_str and vfs_str != "-" else None
+                try: vfs = datetime.strptime(vfs_str, "%d/%m/%Y").date() if vfs_str else None
                 except: vfs = None
                 
-                try: vfr = datetime.strptime(vfr_str, "%d/%m/%Y").date() if vfr_str and vfr_str != "-" else None
+                try: vfr = datetime.strptime(vfr_str, "%d/%m/%Y").date() if vfr_str else None
                 except: vfr = None
 
                 nom = st.text_input("Nombre de la entidad", value=vn, key=f"e_{i}")
@@ -546,18 +545,18 @@ elif st.session_state.pantalla == 'seccion_3':
                 if nom.strip(): 
                     l_nom.append(nom)
                     l_sol.append(sol)
-                    l_fs.append(fs.strftime('%d/%m/%Y') if fs else "-")
-                    l_fr.append(fr.strftime('%d/%m/%Y') if fr else "-")
+                    l_fs.append(fs.strftime('%d/%m/%Y') if fs else "")
+                    l_fr.append(fr.strftime('%d/%m/%Y') if fr else "")
                     
         ent_str="\n".join(l_nom); sol_str="\n".join(l_sol); fs_str="\n".join(l_fs); fr_str="\n".join(l_fr)
         
     st.write("---")
     col1, col2 = st.columns(2)
     if col1.button("⬅️ Regresar y Guardar"):
-        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["-","-","-","-"]
+        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["","","",""]
         navegar('seccion_2'); st.rerun()
     if col2.button("Guardar y Continuar ➡️"):
-        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["-","-","-","-"]
+        st.session_state.fila_datos[12:16] = [ent_str, sol_str, fs_str, fr_str] if aplica=="Aplica" else ["","","",""]
         navegar('seccion_4'); st.rerun()
     st.write("---")
     if st.button("🏠 Volver al inicio"): reset_app()
@@ -571,38 +570,45 @@ elif st.session_state.pantalla == 'seccion_4':
     
     with tab1:
         st.markdown("#### Dirección de Culturas, Patrimonio y Recreación")
-        ap_cult = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="r_cult", index=1 if d[16]=="Aplica" else 0)
-        rec_cult = st.text_area("Recursos entregados (Detalle)", value=d[17] if d[17]!="-" else "", height=150) if ap_cult == "Aplica" else "-"
+        ap_cult = st.radio("¿Aplica?", ["No aplica", "Aplica"], key="r_cult", index=1 if str(d[16]).strip()=="Aplica" else 0)
+        rec_cult = st.text_area("Recursos entregados (Detalle)", value=d[17] if d[17] else "", height=150) if ap_cult == "Aplica" else ""
     
     def dib_dir(idx_base):
-        ap = st.radio("¿Aplica?", ["No aplica", "Aplica"], key=f"ap_{idx_base}", index=1 if d[idx_base]=="Aplica" else 0)
+        ap = st.radio("¿Aplica?", ["No aplica", "Aplica"], key=f"ap_{idx_base}", index=1 if str(d[idx_base]).strip()=="Aplica" else 0)
         if ap == "Aplica":
-            sol = st.text_area("Solicitud realizada (Detalle)", value=d[idx_base+1] if d[idx_base+1]!="-" else "", key=f"s_{idx_base}", height=100)
+            sol = st.text_area("Solicitud realizada (Detalle)", value=d[idx_base+1] if d[idx_base+1] else "", key=f"s_{idx_base}", height=100)
             
-            try: vfs = datetime.strptime(d[idx_base+2], "%d/%m/%Y").date() if d[idx_base+2] and d[idx_base+2]!="-" else None
+            try: vfs = datetime.strptime(d[idx_base+2], "%d/%m/%Y").date() if d[idx_base+2] else None
             except: vfs = None
-            try: vfr = datetime.strptime(d[idx_base+3], "%d/%m/%Y").date() if d[idx_base+3] and d[idx_base+3]!="-" else None
+            try: vfr = datetime.strptime(d[idx_base+3], "%d/%m/%Y").date() if d[idx_base+3] else None
             except: vfr = None
             
             c1, c2 = st.columns(2)
             with c1: fs = st.date_input("Fecha solicitud", value=vfs, key=f"fs_{idx_base}")
             with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{idx_base}")
-            rec = st.text_area("Recursos Entregados (Detalle)", value=d[idx_base+4] if d[idx_base+4]!="-" else "", key=f"r_{idx_base}", height=100)
+            rec = st.text_area("Recursos Entregados (Detalle)", value=d[idx_base+4] if d[idx_base+4] else "", key=f"r_{idx_base}", height=100)
             
-            cp = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if d[idx_base+5]=="No" else 0)
+            # MAGIA: CONDICIONAL DE NIVEL DE CUMPLIMIENTO
+            cp = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if str(d[idx_base+5]).strip()=="No" else 0)
             
-            try: idx_nv = int(d[idx_base+6]) - 1 if str(d[idx_base+6]).isdigit() else 0
-            except: idx_nv = 0
-            if idx_nv > 8: idx_nv = 8 
+            if cp == "No":
+                try: 
+                    val_nv = int(d[idx_base+6])
+                    idx_nv = val_nv - 1
+                except: 
+                    idx_nv = 8 
+                if idx_nv > 8 or idx_nv < 0: idx_nv = 8 
+                
+                opciones_nv = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+                nv = st.selectbox("Nivel de cumplimiento", opciones_nv, key=f"n_{idx_base}", index=idx_nv, format_func=lambda x: f"{x} ({x}0%)")
+            else:
+                nv = 10 # Se guarda como número interno 10, y el selectbox ni siquiera aparece
             
-            opciones_nv = ["1 (10%)", "2 (20%)", "3 (30%)", "4 (40%)", "5 (50%)", "6 (60%)", "7 (70%)", "8 (80%)", "9 (90%)"]
-            nv_val = st.selectbox("Nivel de cumplimiento", opciones_nv, key=f"n_{idx_base}", index=idx_nv)
-            nv = nv_val.split(" ")[0] if cp=="No" else "10"
+            fs_save = fs.strftime("%d/%m/%Y") if fs else ""
+            fr_save = fr.strftime("%d/%m/%Y") if fr else ""
             
-            fs_save = fs.strftime("%d/%m/%Y") if fs else "-"
-            fr_save = fr.strftime("%d/%m/%Y") if fr else "-"
             return ["Aplica", sol, fs_save, fr_save, rec, cp, nv]
-        return ["No aplica", "-", "-", "-", "-", "-", "-"]
+        return ["No aplica", "", "", "", "", "", ""]
 
     with tab2: st.markdown("#### Dirección de Comunicación"); r_com = dib_dir(18)
     with tab3: st.markdown("#### Dirección de Talento Humano"); r_th = dib_dir(25)
@@ -627,24 +633,24 @@ elif st.session_state.pantalla == 'seccion_5':
     with st.container():
         st.markdown("#### 👤 Responsable en territorio")
         c1, c2 = st.columns(2)
-        with c1: resp_asiste = st.text_input("Nombre del responsable que asiste", value=d[39] if d[39]!="-" else "")
-        with c2: cel_asiste = st.text_input("Celular", max_chars=10, value=d[40] if d[40]!="-" else "")
+        with c1: resp_asiste = st.text_input("Nombre del responsable que asiste", value=d[39] if d[39] else "")
+        with c2: cel_asiste = st.text_input("Celular", max_chars=10, value=d[40] if d[40] else "")
         c3, c4 = st.columns(2)
         with c3:
             hs_def = parse_time(d[41])
             hora_salida = st.time_input("Hora de concentración", value=hs_def)
-        with c4: concentracion = st.text_input("Lugar de concentración", value=d[42] if d[42]!="-" else "")
+        with c4: concentracion = st.text_input("Lugar de concentración", value=d[42] if d[42] else "")
     
     celulares = [cel_asiste] if cel_asiste else []
     
     def dib_log(n, mx, idx):
-        with st.expander(f"🚐 Requerimiento de {n}", expanded=(d[idx]=="Aplica")):
-            ap = st.radio(f"¿Aplica {n}?", ["No aplica", "Aplica"], key=f"ap_{idx}", index=1 if d[idx]=="Aplica" else 0)
+        with st.expander(f"🚐 Requerimiento de {n}", expanded=(str(d[idx]).strip()=="Aplica")):
+            ap = st.radio(f"¿Aplica {n}?", ["No aplica", "Aplica"], key=f"ap_{idx}", index=1 if str(d[idx]).strip()=="Aplica" else 0)
             if ap == "Aplica":
                 v_n = int(d[idx+1]) if str(d[idx+1]).isdigit() else 1
                 num = st.selectbox(f"N° de {n}", list(range(1, mx+1)), key=f"n_{idx}", index=v_n-1)
                 
-                existing_lines = [x.strip() for x in str(d[idx+2]).split('\n') if x.strip() and x.strip() != "-"]
+                existing_lines = [x.strip() for x in str(d[idx+2]).split('\n') if x.strip()]
                 
                 cont = []
                 for i in range(num):
@@ -665,7 +671,7 @@ elif st.session_state.pantalla == 'seccion_5':
                     if cel: celulares.append(cel)
                     if nom or cel: cont.append(f"{nom} ({cel})")
                 return ["Aplica", str(num), "\n".join(cont)]
-            return ["No aplica", "-", "-"]
+            return ["No aplica", "", ""]
 
     r_cam = dib_log("Camionetas", 15, 43)
     r_bus = dib_log("Busetas", 15, 46)
@@ -673,21 +679,21 @@ elif st.session_state.pantalla == 'seccion_5':
     
     with st.container():
         st.markdown("#### 📋 Detalles Operativos")
-        insumos = st.text_area("Descripción y requerimientos del evento", value=d[52] if d[52]!="-" else "", height=150)
-        ubicacion = st.text_area("Ubicación exacta / Link de Maps", value=d[53] if d[53]!="-" else "", height=100)
+        insumos = st.text_area("Descripción y requerimientos del evento", value=d[52] if d[52] else "", height=150)
+        ubicacion = st.text_area("Ubicación exacta / Link de Maps", value=d[53] if d[53] else "", height=100)
 
     st.write("---")
     col1, col2 = st.columns(2)
     if col1.button("⬅️ Regresar y Guardar"):
         if any(not c.isdigit() or len(c)!=10 for c in celulares): st.error("❌ Los celulares deben tener 10 números.")
         else:
-            hs_str = hora_salida.strftime("%I:%M %p") if hora_salida else "-"
+            hs_str = hora_salida.strftime("%I:%M %p") if hora_salida else ""
             st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hs_str, concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
             navegar('seccion_4'); st.rerun()
     if col2.button("Guardar y Continuar ➡️"):
         if any(not c.isdigit() or len(c)!=10 for c in celulares): st.error("❌ Los celulares deben tener 10 números.")
         else:
-            hs_str = hora_salida.strftime("%I:%M %p") if hora_salida else "-"
+            hs_str = hora_salida.strftime("%I:%M %p") if hora_salida else ""
             st.session_state.fila_datos[39:54] = [resp_asiste, cel_asiste, hs_str, concentracion] + r_cam + r_bus + r_aux + [insumos, ubicacion]
             navegar('seccion_6'); st.rerun()
     st.write("---")
@@ -699,15 +705,18 @@ elif st.session_state.pantalla == 'seccion_6':
     d = st.session_state.fila_datos
     
     with st.container():
-        try:
-            val_str = str(d[54]).strip()
-            val_idx = int(val_str[0]) - 1 if val_str and val_str[0].isdigit() else 4
-            if val_idx not in [0, 1, 2, 3, 4]: val_idx = 4
-        except:
-            val_idx = 4
-            
-        nivel_ejec = st.radio("Nivel de ejecución del evento", ["1 (Muy Deficiente)", "2 (Deficiente)", "3 (Regular)", "4 (Bueno)", "5 (Perfecto)"], index=val_idx)
-        obs = st.text_area("Observaciones Finales", value=d[55] if d[55]!="-" else "")
+        # MAGIA: Guarda la palabra limpia para Excel, sin el número.
+        val_str = str(d[54]).strip()
+        mapa_eval = {"Muy Deficiente": 0, "Deficiente": 1, "Regular": 2, "Bueno": 3, "Perfecto": 4}
+        val_idx = 4
+        for k, v in mapa_eval.items():
+            if k in val_str: 
+                val_idx = v
+                break
+        
+        opciones_ejec = ["Muy Deficiente", "Deficiente", "Regular", "Bueno", "Perfecto"]
+        nivel_ejec = st.radio("Nivel de ejecución del evento", opciones_ejec, index=val_idx)
+        obs = st.text_area("Observaciones Finales", value=d[55] if d[55] else "")
     
     st.markdown("#### 📥 Previsualizar Documentos (Borrador)")
     col_pdf1, col_pdf2 = st.columns(2)
