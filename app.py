@@ -12,6 +12,16 @@ from docxtpl import DocxTemplate
 # ==========================================
 st.set_page_config(page_title="Hoja de Ruta - Eventos", layout="wide")
 
+# --- RADAR DE CLICS EN IMÁGENES ---
+# Esto atrapa el clic de la imagen y cambia de pantalla automáticamente
+if "area" in st.query_params:
+    area_clic = st.query_params["area"]
+    if area_clic in ["Culturas y Patrimonio", "Recreación"]:
+        st.session_state.area_seleccionada = area_clic
+        st.session_state.pantalla = 'opciones_evento'
+    # Limpiamos la URL para que no se quede "pegada"
+    st.query_params.clear()
+
 def agregar_fondo(imagen_archivo):
     try:
         with open(imagen_archivo, "rb") as image_file:
@@ -67,7 +77,7 @@ def calcular_dias(fecha_inicio, fecha_fin):
     try:
         d1 = datetime.strptime(str(fecha_inicio).strip(), "%d/%m/%Y").date()
         d2 = datetime.strptime(str(fecha_fin).strip(), "%d/%m/%Y").date()
-        return int((d2 - d1).days) # Devuelve número entero para Power BI
+        return int((d2 - d1).days) # Se guarda como número entero para Power BI
     except: return ""
 
 def actualizar_calculos_automaticos():
@@ -105,11 +115,37 @@ def reset_app():
     st.session_state.confirmar_terminar = False
     st.rerun()
 
+# --- FUNCIÓN DE IMAGEN CLICABLE ---
+def boton_imagen_interactivo(ruta_imagen, area_destino, texto_debajo):
+    try:
+        with open(ruta_imagen, 'rb') as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+    except:
+        # Si no encuentra la imagen, pone un botón normal de repuesto
+        if st.button(area_destino):
+            st.session_state.area_seleccionada = area_destino
+            st.session_state.pantalla = 'opciones_evento'
+            st.rerun()
+        return
+
+    # HTML y CSS para que la imagen se vea como un botón, con el texto abajo
+    html_boton = f"""
+        <a href='?area={area_destino}' target='_self' style='text-decoration:none; color:white;'>
+            <div style='text-align: center; cursor: pointer; transition: transform 0.2s;' 
+                 onmouseover="this.style.transform='scale(1.05)'" 
+                 onmouseout="this.style.transform='scale(1)'">
+                <img src='data:image/png;base64,{img_b64}' width='85%' style='border-radius: 50%; box-shadow: 2px 4px 10px rgba(0,0,0,0.5); margin-bottom: 15px;'>
+                <h3 style='margin:0; text-shadow: 2px 2px 4px rgba(0,0,0,0.7);'>{texto_debajo}</h3>
+            </div>
+        </a>
+    """
+    st.markdown(html_boton, unsafe_allow_html=True)
+
+
 # ==========================================
 # 3. GENERADORES DE PLANTILLAS WORD
 # ==========================================
 def txt(texto):
-    # Protege el Word: Si el Excel está vacío, imprime un guion para que no se descuadre
     return str(texto) if texto and str(texto).strip() != "" else "-"
 
 def formato_porcentaje(val):
@@ -294,20 +330,14 @@ if st.session_state.pantalla == 'inicio':
     st.markdown("<h2 style='text-align: center; color: white;'>Seleccione su área</h2>", unsafe_allow_html=True)
     st.write("---") 
     col1, col2 = st.columns(2)
+    
     with col1:
-        try: st.image("icono_cultura.png", use_container_width=True)
-        except: pass
-        if st.button("Culturas y Patrimonio"):
-            st.session_state.area_seleccionada = "Culturas y Patrimonio"
-            st.session_state.pantalla = 'opciones_evento'
-            st.rerun()
+        # LLAMADA A TU IMAGEN PARA CULTURAS
+        boton_imagen_interactivo("icono_cultura.png", "Culturas y Patrimonio", "Culturas y Patrimonio")
+        
     with col2:
-        try: st.image("icono_recreacion.png", use_container_width=True)
-        except: pass
-        if st.button("Recreación"):
-            st.session_state.area_seleccionada = "Recreación"
-            st.session_state.pantalla = 'opciones_evento'
-            st.rerun()
+        # LLAMADA A TU IMAGEN PARA RECREACIÓN
+        boton_imagen_interactivo("icono_recreacion.png", "Recreación", "Recreación")
 
 elif st.session_state.pantalla == 'opciones_evento':
     st.markdown(f"<h3 style='text-align: center; color: white;'>Área: {st.session_state.area_seleccionada}</h3>", unsafe_allow_html=True)
@@ -588,7 +618,6 @@ elif st.session_state.pantalla == 'seccion_4':
             with c2: fr = st.date_input("Fecha respuesta", value=vfr, key=f"fr_{idx_base}")
             rec = st.text_area("Recursos Entregados (Detalle)", value=d[idx_base+4] if d[idx_base+4] else "", key=f"r_{idx_base}", height=100)
             
-            # MAGIA: CONDICIONAL DE NIVEL DE CUMPLIMIENTO
             cp = st.radio("¿Se entregó todo lo solicitado?", ["Sí", "No"], key=f"c_{idx_base}", index=1 if str(d[idx_base+5]).strip()=="No" else 0)
             
             if cp == "No":
@@ -602,7 +631,7 @@ elif st.session_state.pantalla == 'seccion_4':
                 opciones_nv = [1, 2, 3, 4, 5, 6, 7, 8, 9]
                 nv = st.selectbox("Nivel de cumplimiento", opciones_nv, key=f"n_{idx_base}", index=idx_nv, format_func=lambda x: f"{x} ({x}0%)")
             else:
-                nv = 10 # Se guarda como número interno 10, y el selectbox ni siquiera aparece
+                nv = 10 
             
             fs_save = fs.strftime("%d/%m/%Y") if fs else ""
             fr_save = fr.strftime("%d/%m/%Y") if fr else ""
@@ -705,16 +734,13 @@ elif st.session_state.pantalla == 'seccion_6':
     d = st.session_state.fila_datos
     
     with st.container():
-        # MAGIA: Guarda la palabra limpia para Excel, sin el número.
         val_str = str(d[54]).strip()
-        mapa_eval = {"Muy Deficiente": 0, "Deficiente": 1, "Regular": 2, "Bueno": 3, "Perfecto": 4}
-        val_idx = 4
-        for k, v in mapa_eval.items():
-            if k in val_str: 
-                val_idx = v
-                break
-        
         opciones_ejec = ["Muy Deficiente", "Deficiente", "Regular", "Bueno", "Perfecto"]
+        
+        val_idx = 4
+        if val_str in opciones_ejec:
+            val_idx = opciones_ejec.index(val_str)
+            
         nivel_ejec = st.radio("Nivel de ejecución del evento", opciones_ejec, index=val_idx)
         obs = st.text_area("Observaciones Finales", value=d[55] if d[55] else "")
     
